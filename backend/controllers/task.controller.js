@@ -119,6 +119,17 @@ export const updateTask = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You cannot update tasks in a project you do not belong to." });
         }
 
+        // RBAC FIx: Strict rule for Team Members (can only update status)
+        if (!isAdmin && !isManager) {
+            // Remove protected fields from the update payload
+            delete updateData.taskName;
+            delete updateData.taskDescription;
+            delete updateData.assignee;
+            delete updateData.dueDate;
+            delete updateData.priority;
+            delete updateData.projectReference;
+        }
+
         updateData.updatedBy = req.dbUser._id;
 
         if (updateData.taskStatus === "Done") {

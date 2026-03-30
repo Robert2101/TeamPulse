@@ -72,10 +72,19 @@ export const getAllProjects = async (req, res) => {
         const projects = await Project.find(query)
             .populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean(); // Use lean to modify data
+
+        // RBAC: Hide budget from regular team members/stakeholders
+        const sanitizedProjects = projects.map(p => {
+            if (!isAdmin && p.projectManager._id.toString() !== req.dbUser._id.toString()) {
+                delete p.budget;
+            }
+            return p;
+        });
 
         logger.info(`Projects fetched by User ID: ${req.dbUser._id} (Admin: ${isAdmin})`);
-        res.status(200).json(projects);
+        res.status(200).json(sanitizedProjects);
 
     } catch (error) {
         logger.error(`Error fetching projects: ${error.message}`, { stack: error.stack });
@@ -164,20 +173,28 @@ export const getProjectById = async (req, res) => {
 
         const project = await Project.findById(id)
             .populate('projectManager', 'fullName emailAddress profilePicture')
-            .populate('assignedTeamMembers', 'fullName emailAddress profilePicture');
+            .populate('assignedTeamMembers', 'fullName emailAddress profilePicture')
+            .lean(); // Use lean
 
         if (!project) {
             return res.status(404).json({ message: "Project not found." });
         }
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager._id.toString() === req.dbUser._id.toString();
+        // Handle case where projectManager might be null/undefined or populated
+        const pmId = project.projectManager ? project.projectManager._id.toString() : null;
+        const isManager = pmId === req.dbUser._id.toString();
         const isMember = project.assignedTeamMembers.some(member =>
             member._id.toString() === req.dbUser._id.toString()
         );
 
         if (!isAdmin && !isManager && !isMember) {
             return res.status(403).json({ message: "Access Denied. You do not have permission to view this project." });
+        }
+
+        // RBAC: Hide budget from regular team members/stakeholders
+        if (!isAdmin && !isManager) {
+            delete project.budget;
         }
 
         res.status(200).json(project);

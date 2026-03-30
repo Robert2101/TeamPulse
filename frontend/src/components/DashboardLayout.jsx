@@ -4,7 +4,7 @@ import { useStore } from "../store/useStore";
 import api from "../lib/axios";
 
 export const DashboardLayout = ({ children }) => {
-    const { setProjects } = useStore();
+    const { projects, setProjects } = useStore();
 
     const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -22,7 +22,19 @@ export const DashboardLayout = ({ children }) => {
 
     // Extract the current path to make a sleek breadcrumb
     const pathName = window.location.pathname.replace('/', '');
-    const capitalizedPath = pathName ? pathName.charAt(0).toUpperCase() + pathName.slice(1) : 'Overview';
+    let capitalizedPath = pathName ? pathName.charAt(0).toUpperCase() + pathName.slice(1) : 'Overview';
+
+    // check if it's a project path
+    if (capitalizedPath.startsWith('Project/')) {
+        const parts = capitalizedPath.split('/');
+        if (parts.length > 1) {
+             const projectId = parts[1];
+             const project = projects.find(p => p._id === projectId);
+             capitalizedPath = `Project / ${project ? project.projectName : projectId}`;
+        }
+    } else {
+        capitalizedPath = capitalizedPath.replace('-', ' ');
+    }
 
     return (
         <div className="flex h-screen w-full overflow-hidden bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
@@ -37,7 +49,7 @@ export const DashboardLayout = ({ children }) => {
                     <div className="flex items-center gap-2 text-sm font-medium text-zinc-500">
                         <span>Workspace</span>
                         <span>/</span>
-                        <span className="text-zinc-200">{capitalizedPath.replace('-', ' ')}</span>
+                        <span className="text-zinc-200">{capitalizedPath}</span>
                     </div>
                 </header>
 

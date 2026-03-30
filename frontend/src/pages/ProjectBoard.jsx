@@ -109,9 +109,10 @@ export const ProjectBoard = () => {
         project?.projectManager?._id?.toString() === user?._id?.toString() ||
         project?.projectManager?.toString() === user?._id?.toString();
 
-    const canManageTeam = isAdmin || isProjectManager || user?.role?.manageTeamMembers;
+    // strict RBAC rules mapped to actual backend logic
+    const canManageTeam = isAdmin || isProjectManager;
     const canCreateTask = isAdmin || isProjectManager || user?.role?.manageTasks;
-    const canEditProject = isAdmin || isProjectManager || user?.role?.manageProjects; //  NEW CHECK
+    const canEditProject = isAdmin || isProjectManager; 
 
     return (
         <div className="flex h-full flex-col relative">

@@ -15,6 +15,21 @@ export const AiChat = () => {
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
 
+    // Fetch History on Load
+    useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                const response = await api.get("/chatbot/history");
+                if (response.data && response.data.length > 0) {
+                    setMessages(response.data);
+                }
+            } catch (error) {
+                console.error("Failed to fetch chat history:", error);
+            }
+        };
+        fetchHistory();
+    }, []);
+
     // Auto-scroll to bottom when new messages arrive
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -28,30 +43,78 @@ export const AiChat = () => {
         e.preventDefault();
         if (!input.trim()) return;
 
-        const userMsg = { id: Date.now(), role: "user", text: input };
-        setMessages((prev) => [...prev, userMsg]);
+        const userText = input;
+        const userMsg = { id: Date.now(), role: "user", text: userText };
+        
+        // Setup empty bot message
+        const botMsgId = Date.now() + 1;
+        const tempBotMsg = { id: botMsgId, role: "assistant", text: "" };
+        
+        setMessages((prev) => [...prev, userMsg, tempBotMsg]);
         setInput("");
         setIsLoading(true);
 
         try {
-            // Hitting the backend endpoint we verified earlier
-            const response = await api.post("/chatbot/ask", { query: userMsg.text });
+            const response = await fetch("http://localhost:5001/api/chatbot/ask", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    // If you rely on cookies for auth, ensure credentials are included:
+                },
+                credentials: "include", // Required if your API uses cookies to verify req.dbUser
+                body: JSON.stringify({ query: userText }),
+            });
 
-            const botMsg = {
-                id: Date.now() + 1,
-                role: "assistant",
-                text: response.data.reply
-            };
-            setMessages((prev) => [...prev, botMsg]);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // Set up stream reader
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let done = false;
+            setIsLoading(false); // Stop loading animation since stream is starting
+
+            while (!done) {
+                const { value, done: readerDone } = await reader.read();
+                done = readerDone;
+
+                if (value) {
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                            const dataStr = line.replace('data: ', '').trim();
+                            if (dataStr) {
+                                try {
+                                    const parsed = JSON.parse(dataStr);
+                                    if (parsed.textChunk) {
+                                        setMessages((prev) => 
+                                            prev.map(msg => 
+                                                msg.id === botMsgId 
+                                                ? { ...msg, text: msg.text + parsed.textChunk }
+                                                : msg
+                                            )
+                                        );
+                                    }
+                                } catch (err) {
+                                    console.error("Error parsing stream chunk", err, dataStr);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         } catch (error) {
             console.error("Chatbot error:", error);
-            const errorMsg = {
-                id: Date.now() + 1,
-                role: "assistant",
-                text: "I'm having trouble connecting to the system data right now. Please try again."
-            };
-            setMessages((prev) => [...prev, errorMsg]);
-        } finally {
+            setMessages((prev) => 
+                prev.map(msg => 
+                    msg.id === botMsgId 
+                    ? { ...msg, text: "I'm having trouble connecting to the system data right now. Please try again." }
+                    : msg
+                )
+            );
             setIsLoading(false);
         }
     };
@@ -88,10 +151,19 @@ export const AiChat = () => {
                                         ? "bg-zinc-800 text-zinc-100 rounded-tr-sm"
                                         : "bg-indigo-500/10 border border-indigo-500/20 text-indigo-100 rounded-tl-sm"
                                     }`}>
-                                    {/* Simple markdown parsing for lists/newlines if Gemini returns them */}
-                                    {msg.text.split('\n').map((line, i) => (
-                                        <span key={i} className="block min-h-[1rem]">{line}</span>
-                                    ))}
+                                    {/* Clean formatting: properly strip all asterisks and format bullets */}
+                                    {msg.text.split('\n').map((line, i) => {
+                                        // Remove all ** from anywhere
+                                        let cleanLine = line.replace(/\*\*/g, '');
+                                        // Replace leading `* ` or ` - ` (even if indented) with a neat dot
+                                        cleanLine = cleanLine.replace(/^\s*[\*-]\s+/, '• ');
+                                        
+                                        return (
+                                            <span key={i} className="block min-h-[1.25rem]">
+                                                {cleanLine}
+                                            </span>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </motion.div>
@@ -118,6 +190,24 @@ export const AiChat = () => {
                     </motion.div>
                 )}
                 <div ref={messagesEndRef} />
+            </div>
+
+            {/* Quick Prompts Container */}
+            <div className="flex flex-wrap gap-2 px-4 pb-3">
+                {[
+                    "What are my pending tasks?",
+                    "Give me a summary of my active projects",
+                    "Which of my tasks is the highest priority?",
+                    "Update one of my tasks to 'In Progress'"
+                ].map((prompt, idx) => (
+                    <button
+                        key={idx}
+                        onClick={() => setInput(prompt)}
+                        className="text-xs py-1.5 px-3 rounded-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors text-left"
+                    >
+                        {prompt}
+                    </button>
+                ))}
             </div>
 
             {/* Input Area */}

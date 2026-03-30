@@ -73,6 +73,30 @@ export const getFilesByEntity = async (req, res) => {
         const { entityType, entityId } = req.query;
         if (!entityType || !entityId) return res.status(400).json({ message: "entityType and entityId are required." });
 
+        // RBAC FIX: Determine project access before serving files
+        let projectIdToCheck = null;
+        if (entityType === 'Project') {
+            projectIdToCheck = entityId;
+        } else if (entityType === 'Task') {
+            const task = await Task.findById(entityId);
+            if (task) projectIdToCheck = task.projectReference;
+        } else if (entityType === 'Comment') {
+            const comment = await Comment.findById(entityId).populate('task');
+            if (comment && comment.task) projectIdToCheck = comment.task.projectReference;
+        }
+
+        if (projectIdToCheck) {
+            const project = await Project.findById(projectIdToCheck);
+            if (project) {
+                const isAdmin = req.dbUser.role.roleName === 'Admin';
+                const isManager = project.projectManager.toString() === req.dbUser._id.toString();
+                const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+                if (!isAdmin && !isManager && !isMember) {
+                    return res.status(403).json({ message: "Access Denied." });
+                }
+            }
+        }
+
         const files = await FileAsset.find({ entityType, entityId })
             .populate('uploadedBy', 'fullName profilePicture')
             .sort({ createdAt: -1 });

@@ -28,6 +28,10 @@ export const Login = () => {
         }
     };
 
+    const loadDemo = (email, password) => {
+        setCredentials({ emailAddress: email, password: password });
+    };
+
     return (
         <div className="relative flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-white">
             <div className="absolute top-1/4 left-1/4 h-96 w-96 rounded-full bg-indigo-600/10 blur-[100px] pointer-events-none" />
@@ -86,6 +90,25 @@ export const Login = () => {
                         {loading ? <Loader2 className="animate-spin" /> : "Sign In"}
                     </button>
                 </form>
+
+                {/* Demo Credentials for Interview */}
+                <div className="mt-6 border-t border-zinc-800 pt-6">
+                    <p className="text-xs text-center text-zinc-500 mb-3 uppercase tracking-wider font-semibold">Demo Accounts</p>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => loadDemo('admin@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            🛡️ System Admin
+                        </button>
+                        <button onClick={() => loadDemo('sarah@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            📋 Project Manager
+                        </button>
+                        <button onClick={() => loadDemo('alex@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            💻 Team Member
+                        </button>
+                        <button onClick={() => loadDemo('money@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            💼 Stakeholder
+                        </button>
+                    </div>
+                </div>
 
                 <p className="mt-6 text-center text-sm text-zinc-400">
                     Don't have an account? <Link to="/register" className="font-medium text-indigo-400 hover:text-indigo-300">Register here</Link>
