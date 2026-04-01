@@ -46,6 +46,7 @@ export const TaskDetailsModal = ({ task, project, onClose, socket }) => {
                     {/* Right: Real-time Comments */}
                     <TaskChat
                         task={task}
+                        project={project}
                         socket={socket}
                         user={user}
                     />

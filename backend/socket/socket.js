@@ -87,6 +87,21 @@ export const initSocket = (server) => {
             logger.info(`Socket ${socket.id} left Project Room: ${projectId}`);
         });
 
+        // Typing Indicators
+        socket.on("typing", (data) => {
+            // data ideally has { projectId, taskId, userName }
+            if (data.projectId) {
+                socket.to(data.projectId).emit("user-typing", data);
+            }
+        });
+
+        socket.on("stop-typing", (data) => {
+            // data ideally has { projectId, taskId, userName }
+            if (data.projectId) {
+                socket.to(data.projectId).emit("user-stop-typing", data);
+            }
+        });
+
         socket.on("disconnect", () => {
             logger.info(`🔴 Socket Disconnected: ${socket.dbUser.fullName} (${socket.id})`);
         });

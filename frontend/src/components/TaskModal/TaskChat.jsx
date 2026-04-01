@@ -4,7 +4,7 @@ import { MessageSquare, Send, Edit2, Trash2, AlertTriangle, X } from "lucide-rea
 import api from "../../lib/axios";
 import { FileDropZone } from "../files/FileDropZone";
 
-export const TaskChat = ({ task, socket, user }) => {
+export const TaskChat = ({ task, project, socket, user }) => {
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState("");
     const [loading, setLoading] = useState(true);
@@ -16,6 +16,9 @@ export const TaskChat = ({ task, socket, user }) => {
 
     const [commentFile, setCommentFile] = useState(null);
     const [uploadingCommentMedia, setUploadingCommentMedia] = useState(false);
+
+    const [typingUsers, setTypingUsers] = useState([]);
+    const typingTimeoutRef = useRef(null);
 
     const messagesEndRef = useRef(null);
 
@@ -49,6 +52,24 @@ export const TaskChat = ({ task, socket, user }) => {
                     // The HTTP response already replaced the temp entry, so the socket
                     // broadcast will find the real ID and skip re-adding it.
                     if (prev.find(c => c._id === data.comment._id)) return prev;
+
+                    // RACE CONDITION FIX: If socket arrives BEFORE the HTTP response resolves,
+                    // we replace the matching temporary optimistic comment with the real one.
+                    // This way, if the HTTP response drops, we still have the saved comment, 
+                    // and we never duplicate messages on the screen.
+                    const tempCommentIndex = prev.findIndex(c => 
+                        typeof c._id === 'string' &&
+                        c._id.startsWith('temp-') &&
+                        c.commentContent === data.comment.commentContent &&
+                        c.author?._id === data.comment.author?._id
+                    );
+
+                    if (tempCommentIndex !== -1) {
+                        const newComments = [...prev];
+                        newComments[tempCommentIndex] = data.comment;
+                        return newComments;
+                    }
+
                     return [...prev, data.comment];
                 });
                 setTimeout(scrollToBottom, 100);
@@ -63,20 +84,63 @@ export const TaskChat = ({ task, socket, user }) => {
             setComments(prev => prev.filter(c => c._id !== deletedCommentId));
         };
 
+        const handleUserTyping = (data) => {
+            if (data.taskId === task._id && data.userName !== user?.fullName) {
+                setTypingUsers(prev => prev.includes(data.userName) ? prev : [...prev, data.userName]);
+            }
+        };
+
+        const handleUserStopTyping = (data) => {
+            if (data.taskId === task._id && data.userName !== user?.fullName) {
+                setTypingUsers(prev => prev.filter(name => name !== data.userName));
+            }
+        };
+
         socket.on("new-comment", handleNewComment);
         socket.on("comment-edited", handleCommentEdited);
         socket.on("comment-deleted", handleCommentDeleted);
+        socket.on("user-typing", handleUserTyping);
+        socket.on("user-stop-typing", handleUserStopTyping);
 
         return () => {
             socket.off("new-comment", handleNewComment);
             socket.off("comment-edited", handleCommentEdited);
             socket.off("comment-deleted", handleCommentDeleted);
+            socket.off("user-typing", handleUserTyping);
+            socket.off("user-stop-typing", handleUserStopTyping);
         };
     }, [socket, task._id]);
+
+    // Handle input change & emit typing events
+    const handleInputChange = (e) => {
+        setNewComment(e.target.value);
+        if (!socket || !project?._id) return;
+
+        socket.emit("typing", { 
+            projectId: project._id, 
+            taskId: task._id, 
+            userName: user?.fullName 
+        });
+
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        
+        typingTimeoutRef.current = setTimeout(() => {
+            socket.emit("stop-typing", { 
+                projectId: project._id, 
+                taskId: task._id, 
+                userName: user?.fullName 
+            });
+        }, 2000);
+    };
 
     const handleSendComment = async (e) => {
         e.preventDefault();
         if (!newComment.trim() && !commentFile) return;
+
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        if (socket && project?._id) {
+            socket.emit("stop-typing", { projectId: project._id, taskId: task._id, userName: user?.fullName });
+        }
 
         const commentText = newComment.trim() || (commentFile ? "Attached a file" : "");
         // BUG #6 FIX: Capture input before clearing so we can restore it on failure.
@@ -286,7 +350,20 @@ export const TaskChat = ({ task, socket, user }) => {
                 <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-zinc-800 p-4 bg-zinc-950">
+            <div className="border-t border-zinc-800 p-4 bg-zinc-950 relative">
+                {typingUsers.length > 0 && (
+                    <div className="absolute -top-7 left-4 text-[11px] text-zinc-400 italic flex items-center gap-1">
+                        <span className="flex gap-0.5 items-center mr-1 mt-0.5">
+                            <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                            <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                            <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce"></span>
+                        </span>
+                        {typingUsers.length > 2 
+                            ? `${typingUsers.length} people are typing...` 
+                            : `${typingUsers.join(' and ')} ${typingUsers.length === 1 ? 'is' : 'are'} typing...`
+                        }
+                    </div>
+                )}
                 {commentFile && (
                     <div className="mb-2 flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5">
                         <span className="truncate text-xs text-zinc-300">{commentFile.name}</span>
@@ -295,7 +372,13 @@ export const TaskChat = ({ task, socket, user }) => {
                 )}
                 <form onSubmit={handleSendComment} className="flex items-center gap-2">
                     <FileDropZone compact multiple={false} onFilesDropped={(files) => setCommentFile(files[0])} uploading={uploadingCommentMedia} />
-                    <input type="text" value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Type a message..." className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900 py-3 pl-4 pr-4 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none" />
+                    <input 
+                        type="text" 
+                        value={newComment} 
+                        onChange={handleInputChange} 
+                        placeholder="Type a message..." 
+                        className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900 py-3 pl-4 pr-4 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none" 
+                    />
                     <button type="submit" disabled={!newComment.trim() && !commentFile} className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
                         <Send size={14} className="ml-0.5" />
                     </button>
