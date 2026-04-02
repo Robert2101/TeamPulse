@@ -49,7 +49,8 @@ export const askChatbot = async (req, res) => {
         const userProjects = await Project.find({
             $or: [
                 { projectManager: userId },
-                { assignedTeamMembers: userId }
+                { assignedTeamMembers: userId },
+                { createdBy: userId }
             ]
         }).select('projectName projectStatus endDate');
 
