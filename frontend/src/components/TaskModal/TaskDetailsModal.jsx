@@ -14,12 +14,17 @@ export const TaskDetailsModal = ({ task, project, onClose, socket }) => {
     const canAssignMembers = isAdmin || isProjectManager;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity">
+            {/* Click outside to close (Optional but good UX) */}
+            <div className="absolute inset-0 cursor-pointer" onClick={onClose} />
+
             <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl"
+                initial={{ x: "100%", opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: "100%", opacity: 0 }}
+                transition={{ type: "spring", damping: 30, stiffness: 300, mass: 1.5 }}
+                className="relative flex h-full w-full max-w-6xl flex-col overflow-hidden border-l border-zinc-800 bg-[#0a0a0a] shadow-2xl sm:rounded-l-3xl"
+                onClick={(e) => e.stopPropagation()} // Prevent click-outside when clicking inside panel
             >
                 {/* Header Section */}
                 <TaskHeader
@@ -33,8 +38,9 @@ export const TaskDetailsModal = ({ task, project, onClose, socket }) => {
                 <div className="flex flex-1 overflow-hidden">
 
                     {/* Left: Task Details + Attachments */}
-                    <div className="w-1/2 border-r border-zinc-800 p-6 overflow-y-auto">
+                    <div className="w-[35%] border-r border-zinc-800/50 bg-[#0f0f11] p-8 overflow-y-auto space-y-8 custom-scrollbar">
                         <TaskDescription task={task} />
+                        <div className="h-px w-full bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
                         <TaskAttachments
                             task={task}
                             socket={socket}
@@ -44,12 +50,14 @@ export const TaskDetailsModal = ({ task, project, onClose, socket }) => {
                     </div>
 
                     {/* Right: Real-time Comments */}
-                    <TaskChat
-                        task={task}
-                        project={project}
-                        socket={socket}
-                        user={user}
-                    />
+                    <div className="w-[65%] bg-[#0a0a0a] flex flex-col">
+                        <TaskChat
+                            task={task}
+                            project={project}
+                            socket={socket}
+                            user={user}
+                        />
+                    </div>
 
                 </div>
             </motion.div>

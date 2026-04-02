@@ -29,6 +29,7 @@ export const addComment = async (req, res) => {
         const newComment = new Comment({
             commentContent,
             author: req.dbUser._id,
+            workspace: req.dbUser.workspace,
             task: taskId,
             attachments,
             visibleTo
@@ -75,7 +76,7 @@ export const getCommentsByTask = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You cannot view comments for this project." });
         }
 
-        const comments = await Comment.find({ task: taskId })
+        const comments = await Comment.find({ task: taskId, workspace: req.dbUser.workspace })
             .populate('author', 'fullName profilePicture')
             .populate('attachments') // FIX: Populate attachments so images render on refresh!
             .sort({ createdAt: 1 });
@@ -93,7 +94,7 @@ export const editComment = async (req, res) => {
         const { id } = req.params;
         const { commentContent, pinned } = req.body;
 
-        const comment = await Comment.findById(id);
+        const comment = await Comment.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!comment) return res.status(404).json({ message: "Comment not found." });
 
         if (comment.author.toString() !== req.dbUser._id.toString() && req.dbUser.role.roleName !== 'Admin') {
@@ -131,7 +132,7 @@ export const deleteComment = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const comment = await Comment.findById(id);
+        const comment = await Comment.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!comment) return res.status(404).json({ message: "Comment not found." });
 
         if (comment.author.toString() !== req.dbUser._id.toString() && req.dbUser.role.roleName !== 'Admin') {

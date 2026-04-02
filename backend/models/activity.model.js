@@ -24,6 +24,10 @@ const activitySchema = new mongoose.Schema({
     },
     metadata: {
         type: mongoose.Schema.Types.Mixed 
+    },
+    workspace: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Workspace"
     }
 }, { timestamps: true });
 

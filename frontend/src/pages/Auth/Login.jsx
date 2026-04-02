@@ -93,19 +93,19 @@ export const Login = () => {
 
                 {/* Demo Credentials for Interview */}
                 <div className="mt-6 border-t border-zinc-800 pt-6">
-                    <p className="text-xs text-center text-zinc-500 mb-3 uppercase tracking-wider font-semibold">Demo Accounts</p>
+                    <p className="text-xs text-center text-zinc-500 mb-3 uppercase tracking-wider font-semibold">Demo Accounts (Multi-Tenant Test)</p>
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => loadDemo('admin@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
-                            🛡️ System Admin
+                        <button type="button" onClick={() => loadDemo('tony@stark.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-emerald-500/20 hover:text-emerald-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            👑 Tony (Admin)
                         </button>
-                        <button onClick={() => loadDemo('sarah@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
-                            📋 Project Manager
+                        <button type="button" onClick={() => loadDemo('peter@stark.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-emerald-500/20 hover:text-emerald-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            🛠️ Peter (Dev)
                         </button>
-                        <button onClick={() => loadDemo('alex@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
-                            💻 Team Member
+                        <button type="button" onClick={() => loadDemo('bruce@wayne.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            🦇 Bruce (Admin)
                         </button>
-                        <button onClick={() => loadDemo('money@teampulse.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
-                            💼 Stakeholder
+                        <button type="button" onClick={() => loadDemo('dick@wayne.com', 'password123')} className="text-xs py-2 px-3 rounded-lg bg-zinc-800/50 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-zinc-700/50 text-zinc-300">
+                            🦸 Dick (Dev)
                         </button>
                     </div>
                 </div>

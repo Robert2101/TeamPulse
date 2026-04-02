@@ -12,6 +12,12 @@ export const ActivityLog = () => {
     const [filter, setFilter] = useState("All"); // All, Task, Comment, Project
 
     useEffect(() => {
+        if (!selectedProject && projects.length > 0) {
+            setSelectedProject(projects[0]._id);
+        }
+    }, [projects, selectedProject]);
+
+    useEffect(() => {
         if (!selectedProject) return;
         const fetchLogs = async () => {
             setLoading(true);
@@ -42,7 +48,7 @@ export const ActivityLog = () => {
 
     // Determine the icon and color based on the action and entity
     const getActionDetails = (action, entityType) => {
-        const actionLower = action.toLowerCase();
+        const actionLower = (action || '').toLowerCase();
 
         let color = "text-zinc-400 bg-zinc-800 border-zinc-700";
         if (actionLower.includes('create') || actionLower.includes('add')) color = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
@@ -62,18 +68,18 @@ export const ActivityLog = () => {
         const userName = <span className="font-bold text-zinc-200">{log.user?.fullName || "System"}</span>;
         const targetName = log.metadata?.taskName || log.metadata?.projectName || "an item";
 
-        const actionLower = log.action.toLowerCase();
+        const actionLower = (log.action || '').toLowerCase();
         let actionWord = <span className="text-zinc-400">{log.action}</span>;
 
         if (actionLower.includes('delete')) actionWord = <span className="font-medium text-red-400">deleted</span>;
         else if (actionLower.includes('create')) actionWord = <span className="font-medium text-emerald-400">created</span>;
-        else if (actionLower.includes('update')) actionWord = <span className="font-medium text-blue-400">{log.action.toLowerCase()}</span>;
+        else if (actionLower.includes('update')) actionWord = <span className="font-medium text-blue-400">{log.action?.toLowerCase()}</span>;
 
         if (log.entityType === "Comment") {
             return <div className="text-sm">{userName} {actionWord} a comment on a task.</div>;
         }
 
-        return <div className="text-sm">{userName} {actionWord} {log.entityType.toLowerCase()} <span className="font-medium text-zinc-300">"{targetName}"</span>.</div>;
+        return <div className="text-sm">{userName} {actionWord} {log.entityType ? log.entityType.toLowerCase() : "item"} <span className="font-medium text-zinc-300">"{targetName}"</span>.</div>;
     };
 
     const filteredLogs = filter === "All" ? logs : logs.filter(log => log.entityType === filter);

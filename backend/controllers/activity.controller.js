@@ -24,15 +24,15 @@ export const getActivityLogs = async (req, res) => {
         }
 
 
-        const tasks = await Task.find({ projectReference: projectId }).select('_id');
+        const tasks = await Task.find({ projectReference: projectId, workspace: req.dbUser.workspace }).select('_id');
         const taskIds = tasks.map(t => t._id);
 
-        const comments = await Comment.find({ task: { $in: taskIds } }).select('_id');
+        const comments = await Comment.find({ task: { $in: taskIds }, workspace: req.dbUser.workspace }).select('_id');
         const commentIds = comments.map(c => c._id);
 
         const allRelatedIds = [projectId, ...taskIds, ...commentIds];
 
-        const activities = await Activity.find({ entityId: { $in: allRelatedIds } })
+        const activities = await Activity.find({ entityId: { $in: allRelatedIds }, workspace: req.dbUser.workspace })
             .populate('user', 'fullName profilePicture emailAddress')
             .sort({ createdAt: -1 })
             .limit(100);

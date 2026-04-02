@@ -13,17 +13,20 @@ export const TaskHeader = ({ task, project, canAssignMembers, onClose }) => {
     };
 
     return (
-        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-zinc-800/80 bg-[#0f0f11] px-8 py-6 shadow-sm">
             <div>
-                <h2 className="text-xl font-bold text-zinc-100">{task.taskName}</h2>
-                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400">
-                    <span className="flex items-center gap-1"><Clock size={14} /> Due: {new Date(task.dueDate).toLocaleDateString()}</span>
+                <h2 className="text-2xl font-extrabold tracking-tight text-white">{task.taskName}</h2>
+                <div className="mt-3 flex flex-wrap items-center gap-6 text-xs text-zinc-400">
+                    <span className="flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1 font-medium border border-zinc-800">
+                        <Clock size={14} className="text-emerald-400" /> Due: <span className="text-zinc-200">{new Date(task.dueDate).toLocaleDateString()}</span>
+                    </span>
 
-                    <span className="flex items-center gap-1">
-                        <User size={14} />
+                    <span className="flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1 font-medium border border-zinc-800">
+                        <User size={14} className="text-indigo-400" />
                         {canAssignMembers ? (
                             <select
-                                className="bg-transparent text-indigo-400 font-medium focus:outline-none hover:text-indigo-300 cursor-pointer"
+                                className="bg-transparent text-indigo-400 font-bold focus:outline-none hover:text-indigo-300 cursor-pointer"
+
                                 value={task.assignee?._id || task.assignee || ""}
                                 onChange={(e) => handleAssigneeChange(e.target.value)}
                             >

@@ -45,7 +45,12 @@ const commentSchema = new mongoose.Schema({
     visibleTo: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
-    }]
+    }],
+
+    workspace: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Workspace"
+    }
 
 }, { timestamps: true });
 

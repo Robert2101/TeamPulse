@@ -1,26 +1,62 @@
 import User from '../models/user.model.js';
 import Role from '../models/role.model.js';
+import Workspace from '../models/workspace.model.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import logger from '../utils/logger.js';
+import mongoose from 'mongoose';
 
 export const signup = async (req, res) => {
     try {
-        const { fullName, emailAddress, password } = req.body;
+        const { fullName, emailAddress, password, isCreatingWorkspace, workspaceName, inviteCode } = req.body;
 
         const existingUser = await User.findOne({ emailAddress });
         if (existingUser) return res.status(400).json({ message: "User already exists" });
 
-        const teamRole = await Role.findOne({ roleName: 'Team Member' });
-
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        let workspaceId;
+        let roleId;
+
+        // Generate a new User ID ahead of time so the Workspace can reference it
+        const newUserId = new mongoose.Types.ObjectId();
+
+        if (isCreatingWorkspace) {
+            if (!workspaceName) return res.status(400).json({ message: "Workspace name is required" });
+
+            const adminRole = await Role.findOne({ roleName: 'Admin' });
+            roleId = adminRole._id;
+
+            // Generate workspace ID beforehand
+            workspaceId = new mongoose.Types.ObjectId();
+
+            // Create workspace directly with the pre-generated User ID as the owner
+            await Workspace.create({
+                _id: workspaceId,
+                workspaceName,
+                owner: newUserId
+            });
+
+        } else {
+            if (!inviteCode) return res.status(400).json({ message: "Invite code is required to join" });
+
+            const workspace = await Workspace.findOne({ inviteCode: inviteCode.toUpperCase() });
+            if (!workspace) return res.status(404).json({ message: "Invalid invite code" });
+
+            const teamRole = await Role.findOne({ roleName: 'Team Member' });
+            roleId = teamRole._id;
+            workspaceId = workspace._id;
+        }
+
+        // Create the user with the pre-generated ID
         const newUser = await User.create({
+            _id: newUserId,
             fullName,
             emailAddress,
             password: hashedPassword,
-            role: teamRole._id
+            role: roleId,
+            workspace: workspaceId
         });
 
         res.status(201).json({ message: "User registered successfully" });
@@ -52,8 +88,8 @@ export const login = async (req, res) => {
             sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             maxAge: 24 * 60 * 60 * 1000 // 1 day
         });
-        // FIX: Fetch and send the FULL populated user so RBAC works instantly!
-        const populatedUser = await User.findById(user._id).populate('role');
+        
+        const populatedUser = await User.findById(user._id).populate('role').populate('workspace');
         res.status(200).json({ message: "Login successful", user: populatedUser });
     } catch (error) {
         logger.error(`Login Error Detail: ${error.message}`);

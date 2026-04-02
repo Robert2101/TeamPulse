@@ -241,10 +241,10 @@ export const TaskChat = ({ task, project, socket, user }) => {
     };
 
     return (
-        <div className="flex w-1/2 flex-col bg-zinc-900/30">
-            <div className="border-b border-zinc-800 px-6 py-3">
-                <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-zinc-500">
-                    <MessageSquare size={16} /> Team Chat
+        <div className="flex h-full w-full flex-col bg-transparent">
+            <div className="border-b border-zinc-800/50 px-6 py-4 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400">
+                    <MessageSquare size={14} className="text-indigo-400" /> Team Discussion
                 </h3>
             </div>
 
@@ -320,10 +320,10 @@ export const TaskChat = ({ task, project, socket, user }) => {
                                             </div>
                                         )}
 
-                                        <div className={`rounded-2xl px-4 py-2 text-sm ${isMe ? "bg-indigo-600 text-white rounded-br-none" : "bg-zinc-800 text-zinc-100 rounded-bl-none"} max-w-[250px] sm:max-w-[300px]`}>
+                                        <div className={`rounded-2xl px-4 py-3 text-sm ${isMe ? "bg-indigo-600 text-white rounded-br-none" : "bg-zinc-800 text-zinc-100 rounded-bl-none"} max-w-[85%] sm:max-w-[75%]`}>
                                             {c.commentContent}
                                             {c.attachments?.length > 0 && c.attachments[0]?.url && c.attachments[0]?.fileType?.startsWith('image/') && (
-                                                <img src={c.attachments[0].url} alt="media" className="mt-2 w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(c.attachments[0].url, '_blank')} />
+                                                <img src={c.attachments[0].url} alt="media" className="mt-3 w-full max-h-[350px] rounded-lg object-contain bg-zinc-950/50 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(c.attachments[0].url, '_blank')} />
                                             )}
                                         </div>
 

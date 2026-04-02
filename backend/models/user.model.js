@@ -42,6 +42,12 @@ const userSchema = new mongoose.Schema({
         default: "Active"
     },
 
+    workspace: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Workspace",
+        required: false // Optional initially to allow for seamless transition
+    },
+
     role: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Role",

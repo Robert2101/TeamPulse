@@ -31,6 +31,7 @@ export const createTask = async (req, res) => {
             taskName,
             taskDescription,
             projectReference,
+            workspace: req.dbUser.workspace,
             assignee: assignee || null,
             dueDate,
             priority,
@@ -82,7 +83,7 @@ export const getTasksByProject = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You are not a member of this project." });
         }
 
-        const tasks = await Task.find({ projectReference: projectId })
+        const tasks = await Task.find({ projectReference: projectId, workspace: req.dbUser.workspace })
             .populate('assignee', 'fullName emailAddress profilePicture')
             .populate('createdBy', 'fullName')
             .sort({ createdAt: -1 });
@@ -100,7 +101,7 @@ export const updateTask = async (req, res) => {
         const { id } = req.params;
         const updateData = req.body;
 
-        const task = await Task.findById(id);
+        const task = await Task.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!task) {
             return res.status(404).json({ message: "Task not found." });
         }
@@ -163,7 +164,7 @@ export const deleteTask = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const task = await Task.findById(id);
+        const task = await Task.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!task) {
             return res.status(404).json({ message: "Task not found." });
         }
