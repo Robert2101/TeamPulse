@@ -15,8 +15,10 @@ export const useSocket = (projectId) => {
             socketRef.current = null;
         }
 
-        // Use VITE_API_URL if available, otherwise default to local
-        const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+        // Use VITE_API_URL if available, otherwise default to local (undefined in prod uses same host)
+        const SOCKET_URL = import.meta.env.VITE_API_URL 
+            ? import.meta.env.VITE_API_URL 
+            : import.meta.env.MODE === "production" ? undefined : "http://localhost:5001";
         
         const newSocket = io(SOCKET_URL, {
             withCredentials: true,

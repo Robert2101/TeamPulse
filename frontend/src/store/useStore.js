@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const baseURL = import.meta.env.VITE_API_URL 
     ? `${import.meta.env.VITE_API_URL}/api`
-    : "http://localhost:5001/api";
+    : import.meta.env.MODE === "production" ? "/api" : "http://localhost:5001/api";
 
 axios.defaults.baseURL = baseURL;
 axios.defaults.withCredentials = true;
