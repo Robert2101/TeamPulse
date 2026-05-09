@@ -41,7 +41,7 @@ export const Reports = () => {
 
             try {
                 const taskPromises = projects.map((p) =>
-                    api.get(`/ tasks / project / ${ p._id } `)
+                    api.get(`/tasks/project/${p._id}`)
                 );
 
                 const results = await Promise.all(taskPromises);
@@ -243,12 +243,11 @@ export const Reports = () => {
 
                                             <td className="px-6 py-4">
                                                 <span
-                                                    className={`rounded - full border px - 2 py - 0.5 text - [10px] uppercase font - bold ${
-    p.projectStatus ===
-        "Completed"
-        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-        : "bg-gray-100 text-gray-700 border-gray-200"
-} `}
+                                                    className={`rounded-full border px-2 py-0.5 text-[10px] uppercase font-bold ${
+                                                        p.projectStatus === "Completed"
+                                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                                            : "bg-gray-100 text-gray-700 border-gray-200"
+                                                    }`}
                                                 >
                                                     {p.projectStatus}
                                                 </span>
@@ -260,7 +259,7 @@ export const Reports = () => {
 
                                             <td className="px-6 py-4 text-right">
                                                 <Link
-                                                    to={`/ project / ${ p._id } `}
+                                                    to={`/project/${p._id}`}
                                                     className="text-gray-700 hover:text-gray-900 font-medium flex items-center justify-end gap-1"
                                                 >
                                                     Inspect
@@ -351,20 +350,20 @@ export const Reports = () => {
                             {myTodo.slice(0, 5).map((task) => (
                                 <Link
                                     key={task._id}
-                                    to={`/ project / ${
-    task.projectReference?._id ||
-        task.projectReference
-} `}
+                                    to={`/project/${
+                                        task.projectReference?._id ||
+                                        task.projectReference
+                                    }`}
                                     className="group flex items-center justify-between rounded-xl border border-gray-200/50 bg-white shadow-sm p-4 hover:border-gray-300 hover:bg-white transition-all"
                                 >
                                     <div className="flex flex-col">
                                         <div className="flex items-center gap-2">
                                             <span
-                                                className={`rounded px - 1.5 py - 0.5 text - [9px] font - bold uppercase tracking - wider ${
-    task.priority === "Urgent"
-        ? "bg-red-500/10 text-red-500"
-        : "bg-gray-100 text-gray-700 border border-gray-200"
-} `}
+                                                className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                                    task.priority === "Urgent"
+                                                        ? "bg-red-500/10 text-red-500"
+                                                        : "bg-gray-100 text-gray-700 border border-gray-200"
+                                                }`}
                                             >
                                                 {task.priority}
                                             </span>

@@ -194,7 +194,7 @@ export const ProjectBoard = () => {
                             <div className="flex flex-1 flex-col gap-3 overflow-y-auto min-h-[150px]">
                                 {columnTasks.map((task) => (
                                     <div
-                                       Id={task._id}
+                                        id={task._id}
                                         key={task._id}
                                         draggable="true"
                                         onDragStart={(e) => handleDragStart(e, task._id)}
