@@ -44,13 +44,7 @@ export const LandingPage = () => {
                 {/* --- THE TEXT CONTENT --- */}
                 <motion.div style={{ y: heroY, opacity: heroOpacity }} className="z-10 text-center pointer-events-none">
 
-                    <motion.span
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-4 inline-block rounded-full border border-zinc-700/50 bg-zinc-900/60 px-4 py-1.5 text-xs font-bold tracking-widest text-indigo-400 uppercase backdrop-blur-xl shadow-xl"
-                    >
-                        Powered by Gemini AI
-                    </motion.span>
+                    
 
                     <motion.h1
                         initial={{ opacity: 0, y: 20 }}

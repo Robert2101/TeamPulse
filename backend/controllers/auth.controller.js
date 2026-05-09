@@ -44,8 +44,10 @@ export const signup = async (req, res) => {
             const workspace = await Workspace.findOne({ inviteCode: inviteCode.toUpperCase() });
             if (!workspace) return res.status(404).json({ message: "Invalid invite code" });
 
-            const teamRole = await Role.findOne({ roleName: 'Team Member' });
-            roleId = teamRole._id;
+            // ENFORCING PRINCIPLE OF LEAST PRIVILEGE
+            // Everyone who joins via a generic invite code is assigned the absolutely lowest default role: Stakeholder (Read-only Viewer).
+            const defaultRole = await Role.findOne({ roleName: 'Stakeholder' });
+            roleId = defaultRole._id;
             workspaceId = workspace._id;
         }
 
@@ -116,5 +118,55 @@ export const checkAuth = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ message: "Error checking auth status" });
+    }
+};
+
+export const getWorkspaceUsers = async (req, res) => {
+    try {
+        // Only return users in the same workspace
+        const users = await User.find({ workspace: req.dbUser.workspace._id })
+                                .populate('role')
+                                .select('-password');
+        res.status(200).json(users);
+    } catch (error) {
+        logger.error(`Get Workspace Users Error: ${error.message}`);
+        res.status(500).json({ message: "Failed to fetch workspace users" });
+    }
+};
+
+export const updateUserRole = async (req, res) => {
+    try {
+        // Security check: Only Admin can change roles!
+        if (req.dbUser.role.roleName !== 'Admin') {
+            return res.status(403).json({ message: "Only Admins can change user roles" });
+        }
+
+        const { userId } = req.params;
+        const { roleName } = req.body; // e.g. "Project Manager", "Team Member"
+
+        // Prevent modifying the Admin's own role (you don't want to accidentally lock yourself out)
+        if (userId === req.dbUser._id.toString()) {
+            return res.status(400).json({ message: "Cannot modify your own Admin role" });
+        }
+
+        // Find the new role ID
+        const requestedRole = await Role.findOne({ roleName });
+        if (!requestedRole) {
+            return res.status(404).json({ message: "Role not found" });
+        }
+
+        // Ensure the target user actually belongs to THIS admin's workspace
+        const targetUser = await User.findOne({ _id: userId, workspace: req.dbUser.workspace._id });
+        if (!targetUser) {
+            return res.status(404).json({ message: "User not found in your workspace" });
+        }
+
+        targetUser.role = requestedRole._id;
+        await targetUser.save();
+
+        res.status(200).json({ message: "User role updated successfully" });
+    } catch (error) {
+        logger.error(`Update Role Error: ${error.message}`);
+        res.status(500).json({ message: "Failed to update user role" });
     }
 };

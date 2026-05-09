@@ -1,5 +1,5 @@
 import express from 'express';
-import { signup, login, logout, checkAuth } from '../controllers/auth.controller.js';
+import { signup, login, logout, checkAuth, getWorkspaceUsers, updateUserRole } from '../controllers/auth.controller.js';
 import { protectRoute } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -10,5 +10,9 @@ router.post('/logout', logout);
 
 // This is the endpoint you call in App.jsx useEffect
 router.get('/check-auth', protectRoute, checkAuth);
+
+// Workspace Administration Routes
+router.get('/workspace/users', protectRoute, getWorkspaceUsers);
+router.put('/workspace/users/:userId/role', protectRoute, updateUserRole);
 
 export default router;
