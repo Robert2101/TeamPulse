@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Clock } from "lucide-react";
 
 import api from "../lib/axios";
@@ -98,7 +97,7 @@ export const ProjectBoard = () => {
     };
 
     if (loading) {
-        return <div className="flex h-full items-center justify-center text-zinc-400 animate-pulse">Loading Workspace...</div>;
+        return <div className="flex h-full items-center justify-center text-gray-500 animate-pulse">Loading Workspace...</div>;
     }
 
     if (!project) return <div className="p-8 text-red-400">Project not found or access denied.</div>;
@@ -117,22 +116,19 @@ export const ProjectBoard = () => {
     return (
         <div className="flex h-full flex-col relative">
             {/* Board Header */}
-            <div className="mb-8 flex items-center justify-between border-b border-zinc-800 pb-6">
+            <div className="mb-8 flex items-center justify-between border-b border-gray-200 pb-6">
                 <div>
-                    <Link to="/dashboard" className="mb-2 flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
+                    <Link to="/dashboard" className="mb-2 flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
                         <ArrowLeft size={16} /> Back to Dashboard
                     </Link>
                     <div className="flex items-center gap-3">
-                        <h2 className="text-3xl font-bold tracking-tight text-zinc-100">{project.projectName}</h2>
+                        <h2 className="text-3xl font-bold tracking-tight text-gray-900">{project.projectName}</h2>
                         {/* Status Badge */}
-                        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider mt-1 ${project.projectStatus === 'Completed' ? 'border-blue-500/30 bg-blue-500/10 text-blue-400' :
-                                project.projectStatus === 'On Hold' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' :
-                                    'border-green-500/30 bg-green-500/10 text-green-400'
-                            }`}>
+                        <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider mt-1 text-gray-700">
                             {project.projectStatus || 'Active'}
                         </span>
                     </div>
-                    <p className="text-zinc-400 mt-1">{project.projectDescription}</p>
+                    <p className="text-gray-500 mt-1">{project.projectDescription}</p>
                 </div>
 
                 {/* --- CONDITIONAL RENDERING CONTROL PANEL --- */}
@@ -157,15 +153,15 @@ export const ProjectBoard = () => {
             </div>
 
             {/* Tab Bar */}
-            <div className="mb-6 flex gap-1 border-b border-zinc-800">
+            <div className="mb-6 flex gap-1 border-b border-gray-200">
                 {["kanban", "assets"].map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
                             activeTab === tab
-                                ? "border-indigo-500 text-indigo-400"
-                                : "border-transparent text-zinc-500 hover:text-zinc-300"
+                                ? "border-gray-300 text-gray-900"
+                                : "border-transparent text-gray-500 hover:text-gray-900"
                         }`}
                     >
                         {tab === "kanban" ? "Kanban" : "Assets"}
@@ -186,46 +182,44 @@ export const ProjectBoard = () => {
                             key={status}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, status)}
-                            className="flex h-full min-w-[320px] max-w-[320px] flex-col rounded-2xl bg-zinc-900/30 p-4 border border-zinc-800 transition-colors hover:bg-zinc-900/50"
+                            className="flex h-full min-w-[320px] max-w-[320px] flex-col rounded-2xl bg-white shadow-sm p-4 border border-gray-200 transition-colors hover:bg-white border-gray-200"
                         >
                             <div className="mb-4 flex items-center justify-between">
-                                <h3 className="font-semibold text-zinc-300">{status}</h3>
-                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-400">
+                                <h3 className="font-semibold text-gray-700">{status}</h3>
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-700 border border-gray-200">
                                     {columnTasks.length}
                                 </span>
                             </div>
 
                             <div className="flex flex-1 flex-col gap-3 overflow-y-auto min-h-[150px]">
                                 {columnTasks.map((task) => (
-                                    <motion.div
-                                        layoutId={task._id}
+                                    <div
+                                       Id={task._id}
                                         key={task._id}
                                         draggable="true"
                                         onDragStart={(e) => handleDragStart(e, task._id)}
                                         onDragEnd={handleDragEnd}
                                         onClick={() => setSelectedTask(task)}
-                                        className="group cursor-grab active:cursor-grabbing rounded-xl border border-zinc-800 bg-zinc-950 p-4 shadow-sm transition-all hover:border-indigo-500/50 hover:shadow-indigo-500/10"
+                                        className="group cursor-grab active:cursor-grabbing rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm transition-all hover:border-gray-300"
                                     >
                                         <div className="mb-2 flex items-center justify-between">
                                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${task.priority === 'Urgent' ? 'bg-red-500/10 text-red-500' :
-                                                task.priority === 'High' ? 'bg-orange-500/10 text-orange-400' :
-                                                    task.priority === 'Medium' ? 'bg-blue-500/10 text-blue-400' :
-                                                        'bg-zinc-800 text-zinc-400'
+                                                'bg-gray-100 text-gray-700 border border-gray-200'
                                                 }`}>
                                                 {task.priority}
                                             </span>
                                         </div>
-                                        <h4 className="font-medium text-zinc-100">{task.taskName}</h4>
+                                        <h4 className="font-medium text-gray-900">{task.taskName}</h4>
                                         {task.dueDate && (
-                                            <div className="mt-3 flex items-center gap-1.5 text-xs text-zinc-500">
+                                            <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-400">
                                                 <Clock size={14} />
                                                 {new Date(task.dueDate).toLocaleDateString()}
                                             </div>
                                         )}
-                                    </motion.div>
+                                    </div>
                                 ))}
                                 {columnTasks.length === 0 && (
-                                    <div className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-sm text-zinc-600 pointer-events-none">
+                                    <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500 pointer-events-none">
                                         Drop tasks here
                                     </div>
                                 )}
@@ -236,7 +230,7 @@ export const ProjectBoard = () => {
                 </div>
             )}
 
-            <AnimatePresence>
+            <>
                 {selectedTask && (
                     <TaskDetailsModal
                         task={selectedTask}
@@ -245,7 +239,7 @@ export const ProjectBoard = () => {
                         socket={socket}
                     />
                 )}
-            </AnimatePresence>
+            </>
         </div>
     );
 };

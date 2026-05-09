@@ -32,7 +32,7 @@ export const FileDropZone = ({ onFilesDropped, multiple = true, uploading = fals
         return (
             <div
                 {...getRootProps()}
-                className="cursor-pointer text-zinc-400 hover:text-indigo-400 transition-colors"
+                className="cursor-pointer text-gray-500 hover:text-indigo-400 transition-colors"
                 title="Attach file"
             >
                 <input {...getInputProps()} />
@@ -47,17 +47,17 @@ export const FileDropZone = ({ onFilesDropped, multiple = true, uploading = fals
             className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors cursor-pointer
                 ${isDragActive
                     ? "border-indigo-500 bg-indigo-500/10"
-                    : "border-zinc-700 bg-zinc-900/30 hover:border-indigo-500/50 hover:bg-zinc-900/50"
+                    : "border-gray-300 bg-white shadow-sm hover:border-indigo-500/50 hover:bg-white border-gray-200"
                 }
                 ${uploading ? "opacity-50 cursor-not-allowed" : ""}
             `}
         >
             <input {...getInputProps()} />
-            <Upload size={24} className={`mb-2 ${isDragActive ? "text-indigo-400" : "text-zinc-500"}`} />
-            <p className="text-sm font-medium text-zinc-300">
+            <Upload size={24} className={`mb-2 ${isDragActive ? "text-indigo-400" : "text-gray-400"}`} />
+            <p className="text-sm font-medium text-gray-700">
                 {isDragActive ? "Drop files here" : "Drag & drop files, or click to select"}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-gray-400">
                 Images, PDFs, Word, Excel, TXT — max 50 MB
             </p>
             {uploading && (

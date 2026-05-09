@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { FolderOpen, Trash2 } from "lucide-react";
 import api from "../lib/axios";
 import { useStore } from "../store/useStore";
@@ -98,15 +97,15 @@ export const AssetsHub = ({ project, socket }) => {
         <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
-                        <FolderOpen size={20} className="text-indigo-400" /> Project Assets
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <FolderOpen size={20} className="text-gray-700" /> Project Assets
                     </h3>
-                    <p className="mt-1 text-sm text-zinc-400">
+                    <p className="mt-1 text-sm text-gray-500">
                         Central storage for brand files, contracts, templates, and resources.
                     </p>
                 </div>
                 {assets.length > 0 && (
-                    <span className="text-sm text-zinc-500">{assets.length} file{assets.length !== 1 ? 's' : ''}</span>
+                    <span className="text-sm text-gray-400">{assets.length} file{assets.length !== 1 ? 's' : ''}</span>
                 )}
             </div>
 
@@ -117,23 +116,23 @@ export const AssetsHub = ({ project, socket }) => {
             {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[1, 2, 3].map(i => (
-                        <div key={i} className="h-16 animate-pulse rounded-xl bg-zinc-900" />
+                        <div key={i} className="h-16 animate-pulse rounded-xl bg-white" />
                     ))}
                 </div>
             ) : assets.length === 0 ? (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 py-16 text-center"
+                <div
+                   
+                   
+                    className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-16 text-center"
                 >
-                    <FolderOpen size={40} className="mb-3 text-zinc-700" />
-                    <p className="text-sm font-medium text-zinc-500">No assets yet</p>
-                    <p className="mt-1 text-xs text-zinc-600">
+                    <FolderOpen size={40} className="mb-3 text-gray-700" />
+                    <p className="text-sm font-medium text-gray-400">No assets yet</p>
+                    <p className="mt-1 text-xs text-gray-500">
                         {canUpload
                             ? "Drag & drop files above to add project assets."
                             : "No project assets have been uploaded yet."}
                     </p>
-                </motion.div>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {assets.map(file => (

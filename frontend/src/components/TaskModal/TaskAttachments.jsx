@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import api from "../../lib/axios";
 import { FileDropZone } from "../files/FileDropZone";
@@ -93,24 +92,24 @@ export const TaskAttachments = ({ task, socket, user, isAdmin }) => {
                 onClick={() => setShowAttachments(v => !v)}
                 className="flex w-full items-center justify-between mb-3"
             >
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
                     Attachments {attachments.length > 0 && `(${attachments.length})`}
                 </h3>
-                {showAttachments ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
+                {showAttachments ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
             </button>
 
-            <AnimatePresence>
+            <>
                 {showAttachments && (
-                    <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
+                    <div
+                       
+                       
+                       
                         className="space-y-2"
                     >
                         <FileDropZone onFilesDropped={handleAttachmentDrop} uploading={uploadingAttachment} />
 
                         {attachmentsLoading ? (
-                            <p className="text-xs text-zinc-500 animate-pulse">Loading attachments…</p>
+                            <p className="text-xs text-gray-400 animate-pulse">Loading attachments…</p>
                         ) : attachments.length === 0 ? (
                             <p className="text-xs text-zinc-600">No attachments yet.</p>
                         ) : (
@@ -123,9 +122,9 @@ export const TaskAttachments = ({ task, socket, user, isAdmin }) => {
                                 />
                             ))
                         )}
-                    </motion.div>
+                    </div>
                 )}
-            </AnimatePresence>
+            </>
         </div>
     );
 };

@@ -37,24 +37,21 @@ export const DashboardLayout = ({ children }) => {
     }
 
     return (
-        <div className="flex h-screen w-full overflow-hidden bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
+        <div className="flex h-screen w-full bg-gray-50 text-gray-900 font-sans selection:bg-indigo-100">
             <Sidebar isCollapsed={isCollapsed} toggleSidebar={() => setIsCollapsed(!isCollapsed)} />
 
-            <main className="flex flex-1 flex-col min-w-0 overflow-hidden relative">
-                {/* Subtle top glow effect */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[200px] bg-indigo-500/5 blur-[120px] pointer-events-none" />
-
+            <main className="flex flex-1 flex-col min-w-0 overflow-y-auto">
                 {/* Minimalist Top Bar */}
-                <header className="flex h-16 shrink-0 items-center gap-2 px-8 z-10">
-                    <div className="flex items-center gap-2 text-sm font-medium text-zinc-500">
+                <header className="flex h-16 shrink-0 items-center gap-2 px-8 border-b border-gray-200 bg-white">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
                         <span>Workspace</span>
-                        <span>/</span>
-                        <span className="text-zinc-200">{capitalizedPath}</span>
+                        <span className="text-gray-300">/</span>
+                        <span className="text-gray-900">{capitalizedPath}</span>
                     </div>
                 </header>
 
                 {/* Scrollable Content Area */}
-                <div className="flex-1 overflow-y-auto px-8 pb-12 pt-2 scroll-smooth">
+                <div className="flex-1 px-8 pb-12 pt-6">
                     {children}
                 </div>
             </main>

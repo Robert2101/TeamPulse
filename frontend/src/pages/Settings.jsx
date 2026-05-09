@@ -77,15 +77,15 @@ export const Settings = () => {
     return (
         <div className="max-w-3xl mx-auto space-y-8">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight text-white">Account Settings</h2>
-                <p className="mt-2 text-zinc-400">Manage your profile and preferences.</p>
+                <h2 className="text-3xl font-bold tracking-tight text-gray-900">Account Settings</h2>
+                <p className="mt-2 text-gray-500">Manage your profile and preferences.</p>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-8 shadow-xl">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-8 pb-8 border-b border-zinc-800">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 shadow-xl">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-8 pb-8 border-b border-gray-200">
                     {/* Avatar with upload overlay */}
                     <div className="relative shrink-0">
-                        <div className="flex h-24 w-24 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400 overflow-hidden">
+                        <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-100 text-gray-700 overflow-hidden">
                             {user?.profilePicture ? (
                                 <img
                                     src={user.profilePicture}
@@ -101,7 +101,7 @@ export const Settings = () => {
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-zinc-950 bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+                            className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-gray-700 shadow-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
                             title="Upload profile picture"
                         >
                             {uploading ? (
@@ -120,27 +120,27 @@ export const Settings = () => {
                         />
                     </div>
                     <div className="space-y-4 mt-8 pb-4">
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">Workspace Details</h4>
-                        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Workspace Details</h4>
+                        <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
-                                <h5 className="font-bold text-white text-lg">{user?.workspace?.workspaceName}</h5>
+                                <h5 className="font-bold text-gray-900 text-lg">{user?.workspace?.workspaceName}</h5>
                                 {user?.role?.roleName === 'Admin' ? (
-                                    <p className="text-sm text-zinc-400">Share this invite code with developers so they can join your workspace.</p>
+                                    <p className="text-sm text-gray-500">Share this invite code with developers so they can join your workspace.</p>
                                 ) : (
-                                    <p className="text-sm text-zinc-400">You are a member of this workspace.</p>
+                                    <p className="text-sm text-gray-500">You are a member of this workspace.</p>
                                 )}
                             </div>
 
                             {user?.role?.roleName === 'Admin' && (
                                 <div className="flex flex-col items-center gap-2">
-                                    <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Invite Code</span>
-                                    <div className="group relative flex items-center gap-3 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-6 py-3 transition-colors hover:border-indigo-500/50">
-                                        <span className="font-mono text-2xl font-bold tracking-[0.25em] text-indigo-400">
+                                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Invite Code</span>
+                                    <div className="group relative flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-6 py-3 transition-colors hover:border-gray-300">
+                                        <span className="font-mono text-2xl font-bold tracking-[0.25em] text-gray-900">
                                             {user?.workspace?.inviteCode || '------'}
                                         </span>
                                         <button
                                             onClick={() => navigator.clipboard.writeText(user?.workspace?.inviteCode)}
-                                            className="text-indigo-400 opacity-50 transition-opacity hover:opacity-100"
+                                            className="text-gray-700 opacity-60 transition-opacity hover:opacity-100"
                                             title="Copy to clipboard"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
@@ -152,22 +152,22 @@ export const Settings = () => {
                     </div>
 
                     <div>
-                        <h3 className="text-2xl font-bold text-white">{user?.fullName}</h3>
-                        <p className="text-zinc-400 flex items-center gap-2 mt-2">
+                        <h3 className="text-2xl font-bold text-gray-900">{user?.fullName}</h3>
+                        <p className="text-gray-500 flex items-center gap-2 mt-2">
                             <Mail size={16} /> {user?.emailAddress}
                         </p>
                         <div className="flex flex-wrap gap-3 mt-3">
-                            <span className="text-indigo-400 flex items-center gap-1.5 bg-indigo-500/10 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            <span className="text-gray-700 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-200">
                                 <Shield size={14} /> {user?.role?.roleName || "Team Member"}
                             </span>
-                            <span className="text-green-400 flex items-center gap-1.5 bg-green-500/10 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            <span className="text-gray-700 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-200">
                                 Active Status
                             </span>
                         </div>
 
                         {/* Upload feedback */}
                         {uploadStatus === 'success' && (
-                            <p className="mt-2 flex items-center gap-1.5 text-xs text-green-400">
+                            <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-700">
                                 <CheckCircle size={13} /> Profile picture updated successfully.
                             </p>
                         )}
@@ -176,7 +176,7 @@ export const Settings = () => {
                                 <AlertCircle size={13} /> Failed to upload. Please try again.
                             </p>
                         )}
-                        <p className="mt-2 text-xs text-zinc-500">Click the camera icon to update your profile picture.</p>
+                        <p className="mt-2 text-xs text-gray-400">Click the camera icon to update your profile picture.</p>
                     </div>
                 </div>
 
@@ -184,23 +184,23 @@ export const Settings = () => {
 
             {/* --- ADMIN USER MANAGEMENT PANEL --- */}
             {user?.role?.roleName === 'Admin' && (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-8 shadow-xl mt-8">
-                    <div className="flex items-center gap-3 mb-6 border-b border-zinc-800 pb-4">
-                        <Users className="text-indigo-400" size={24} />
+                <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 shadow-xl mt-8">
+                    <div className="flex items-center gap-3 mb-6 border-b border-gray-200 pb-4">
+                        <Users className="text-gray-700" size={24} />
                         <div>
-                            <h3 className="text-xl font-bold text-white">User Management</h3>
-                            <p className="text-sm text-zinc-400">Upgrade or modify permissions for members in your workspace.</p>
+                            <h3 className="text-xl font-bold text-gray-900">User Management</h3>
+                            <p className="text-sm text-gray-500">Upgrade or modify permissions for members in your workspace.</p>
                         </div>
                     </div>
 
                     {loadingUsers ? (
-                        <div className="flex justify-center p-8 text-indigo-400"><Loader2 className="animate-spin" /></div>
+                        <div className="flex justify-center p-8 text-gray-500"><Loader2 className="animate-spin" /></div>
                     ) : (
                         <div className="space-y-4">
                             {workspaceUsers.map((member) => (
-                                <div key={member._id} className="flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border border-zinc-800 bg-zinc-900/50 gap-4">
+                                <div key={member._id} className="flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border border-gray-200 bg-white border-gray-200 gap-4">
                                     <div className="flex items-center gap-4">
-                                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-sm font-bold">
+                                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gray-100 flex items-center justify-center text-gray-700 text-sm font-bold border border-gray-200">
                                             {member.profilePicture ? (
                                                 <img src={member.profilePicture} alt={member.fullName} className="h-full w-full object-cover" />
                                             ) : (
@@ -208,19 +208,19 @@ export const Settings = () => {
                                             )}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold text-white">{member.fullName}</p>
-                                            <p className="text-xs text-zinc-500">{member.emailAddress}</p>
+                                            <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
+                                            <p className="text-xs text-gray-400">{member.emailAddress}</p>
                                         </div>
                                     </div>
 
                                     {/* Role Management Dropdown */}
                                     <div className="flex items-center gap-3 w-full md:w-auto">
-                                        <span className="text-xs text-zinc-500 uppercase tracking-widest">Role</span>
+                                        <span className="text-xs text-gray-400 uppercase tracking-widest">Role</span>
                                         <select
                                             disabled={member._id === user._id}
                                             value={member.role?.roleName}
                                             onChange={(e) => handleRoleChange(member._id, e.target.value)}
-                                            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                                            className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none disabled:opacity-50"
                                         >
                                             <option value="Admin">Admin</option>
                                             <option value="Project Manager">Project Manager</option>

@@ -17,6 +17,11 @@ export const uploadFile = async (req, res) => {
         if (!entityType || !entityId) return res.status(400).json({ message: "entityType and entityId are required." });
         if (!["Task", "Comment", "User", "Project"].includes(entityType)) return res.status(400).json({ message: "Invalid entityType." });
 
+        let finalEntityId = entityId;
+        if (entityType === 'User') {
+            finalEntityId = req.dbUser._id.toString(); // IDOR FIX: Users can only upload their own pic
+        }
+
         const uploadResult = await new Promise((resolve, reject) => {
             const uploadStream = cloudinary.uploader.upload_stream(
                 { folder: `teampulse/${entityType.toLowerCase()}s`, resource_type: 'auto', use_filename: true, unique_filename: true },
@@ -34,30 +39,30 @@ export const uploadFile = async (req, res) => {
             cloudinaryResourceType: uploadResult.resource_type || 'raw',
             uploadedBy: req.dbUser._id,
             entityType,
-            entityId,
+            entityId: finalEntityId,
         });
 
         let projectIdToBroadcast = null;
 
         if (entityType === 'Task') {
-            const task = await Task.findByIdAndUpdate(entityId, { $push: { attachments: fileAsset._id } });
+            const task = await Task.findByIdAndUpdate(finalEntityId, { $push: { attachments: fileAsset._id } });
             if (task) projectIdToBroadcast = task.projectReference;
         } else if (entityType === 'Comment') {
-            const comment = await Comment.findByIdAndUpdate(entityId, { $push: { attachments: fileAsset._id } }).populate('task');
+            const comment = await Comment.findByIdAndUpdate(finalEntityId, { $push: { attachments: fileAsset._id } }).populate('task');
             if (comment && comment.task) projectIdToBroadcast = comment.task.projectReference;
         } else if (entityType === 'Project') {
-            await Project.findByIdAndUpdate(entityId, { $push: { assets: fileAsset._id } });
-            projectIdToBroadcast = entityId;
+            await Project.findByIdAndUpdate(finalEntityId, { $push: { assets: fileAsset._id } });
+            projectIdToBroadcast = finalEntityId;
         } else if (entityType === 'User') {
-            await User.findByIdAndUpdate(entityId, { profilePicture: uploadResult.secure_url });
+            await User.findByIdAndUpdate(finalEntityId, { profilePicture: uploadResult.secure_url });
         }
 
         const populated = await fileAsset.populate('uploadedBy', 'fullName');
 
-        await logActivity(req.dbUser._id, 'Uploaded File', entityType, entityId, { fileName: req.file.originalname, fileId: fileAsset._id });
+        await logActivity(req.dbUser._id, 'Uploaded File', entityType, finalEntityId, { fileName: req.file.originalname, fileId: fileAsset._id });
 
         if (projectIdToBroadcast) {
-            getIO().to(projectIdToBroadcast.toString()).emit('file-uploaded', { entityType, entityId, file: populated });
+            getIO().to(projectIdToBroadcast.toString()).emit('file-uploaded', { entityType, entityId: finalEntityId, file: populated });
         }
 
         res.status(201).json({ message: "File uploaded successfully.", file: populated });

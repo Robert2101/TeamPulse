@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "./store/useStore";
 
 // Layout & Auth
@@ -27,10 +26,10 @@ export default function App() {
 
   if (isAuthChecking) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950">
-        <motion.div
-          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ repeat: Infinity, duration: 2 }}
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div
+         
+         
           className="h-12 w-12 rounded-full border-t-2 border-indigo-500"
         />
       </div>
@@ -39,7 +38,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <AnimatePresence mode="wait">
+      <>
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" />} />
@@ -55,7 +54,7 @@ export default function App() {
           <Route path="/activity" element={user ? <DashboardLayout><ActivityLog /></DashboardLayout> : <Navigate to="/" />} />
           <Route path="/settings" element={user ? <DashboardLayout><Settings /></DashboardLayout> : <Navigate to="/" />} />
         </Routes>
-      </AnimatePresence>
+      </>
     </BrowserRouter>
   );
 }

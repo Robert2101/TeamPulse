@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, Sparkles, Loader2 } from "lucide-react";
 import api from "../lib/axios";
 
@@ -126,36 +125,36 @@ export const AiChat = () => {
     };
 
     return (
-        <div className="flex h-[calc(100vh-4rem)] flex-col rounded-2xl border border-zinc-800 bg-zinc-900/30 shadow-2xl">
+        <div className="flex h-[calc(100vh-4rem)] flex-col rounded-2xl border border-gray-200 bg-white shadow-sm shadow-2xl">
             {/* Chat Header */}
-            <div className="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/50 px-6 py-4 backdrop-blur-md rounded-t-2xl">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400">
+            <div className="flex items-center gap-3 border-b border-gray-200 bg-white border-gray-200 px-6 py-4 backdrop-blur-md rounded-t-2xl">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700">
                     <Sparkles size={20} />
                 </div>
                 <div>
-                    <h2 className="text-lg font-bold text-zinc-100">TeamPulse AI</h2>
-                    <p className="text-xs text-zinc-400">Powered by Gemini 2.5 Flash</p>
+                    <h2 className="text-lg font-bold text-gray-900">TeamPulse AI</h2>
+                    <p className="text-xs text-gray-500">Powered by Gemini 2.5 Flash</p>
                 </div>
             </div>
 
             {/* Chat Messages Area */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                <AnimatePresence initial={false}>
+                <>
                     {messages.map((msg) => (
-                        <motion.div
+                        <div
                             key={msg.id}
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                           
+                           
                             className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                         >
                             <div className={`flex max-w-[80%] gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${msg.role === "user" ? "bg-zinc-800 text-zinc-300" : "bg-indigo-600 text-white"
+                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 ${msg.role === "user" ? "bg-gray-100 text-gray-700" : "bg-white text-gray-700"
                                     }`}>
                                     {msg.role === "user" ? <User size={16} /> : <Bot size={16} />}
                                 </div>
                                 <div className={`rounded-2xl px-5 py-3 text-sm ${msg.role === "user"
-                                        ? "bg-zinc-800 text-zinc-100 rounded-tr-sm"
-                                        : "bg-indigo-500/10 border border-indigo-500/20 text-indigo-100 rounded-tl-sm"
+                                        ? "bg-gray-100 text-gray-900 rounded-tr-sm"
+                                        : "bg-white border border-gray-200 text-gray-900 rounded-tl-sm"
                                     }`}>
                                     {/* Clean formatting: properly strip all asterisks and format bullets */}
                                     {msg.text.split('\n').map((line, i) => {
@@ -172,28 +171,28 @@ export const AiChat = () => {
                                     })}
                                 </div>
                             </div>
-                        </motion.div>
+                        </div>
                     ))}
-                </AnimatePresence>
+                </>
 
                 {/* Loading Indicator */}
                 {isLoading && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
+                    <div
+                       
+                       
                         className="flex w-full justify-start"
                     >
                         <div className="flex max-w-[80%] gap-3 flex-row">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700">
                                 <Bot size={16} />
                             </div>
-                            <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 px-5 py-4 text-sm rounded-tl-sm flex gap-1.5 items-center">
-                                <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6 }} className="h-2 w-2 rounded-full bg-indigo-400" />
-                                <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} className="h-2 w-2 rounded-full bg-indigo-400" />
-                                <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} className="h-2 w-2 rounded-full bg-indigo-400" />
+                            <div className="rounded-2xl bg-white border border-gray-200 px-5 py-4 text-sm rounded-tl-sm flex gap-1.5 items-center">
+                                <div className="h-2 w-2 rounded-full bg-gray-400" />
+                                <div className="h-2 w-2 rounded-full bg-gray-400" />
+                                <div className="h-2 w-2 rounded-full bg-gray-400" />
                             </div>
                         </div>
-                    </motion.div>
+                    </div>
                 )}
                 <div ref={messagesEndRef} />
             </div>
@@ -209,7 +208,7 @@ export const AiChat = () => {
                     <button
                         key={idx}
                         onClick={() => setInput(prompt)}
-                        className="text-xs py-1.5 px-3 rounded-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors text-left"
+                        className="text-xs py-1.5 px-3 rounded-full bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 hover:text-gray-900 transition-colors text-left"
                     >
                         {prompt}
                     </button>
@@ -217,20 +216,20 @@ export const AiChat = () => {
             </div>
 
             {/* Input Area */}
-            <div className="border-t border-zinc-800 bg-zinc-950/50 p-4 rounded-b-2xl">
+            <div className="border-t border-gray-200 bg-gray-50/50 p-4 rounded-b-2xl">
                 <form onSubmit={handleSend} className="relative flex items-center">
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Ask about your projects, tasks, or team..."
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-4 pl-4 pr-14 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                        className="w-full rounded-xl border border-gray-200 bg-white py-4 pl-4 pr-14 text-sm text-gray-900 focus:border-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 transition-colors"
                         disabled={isLoading}
                     />
                     <button
                         type="submit"
                         disabled={!input.trim() || isLoading}
-                        className="absolute right-2 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white transition-all hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600"
+                        className="absolute right-2 flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-900 transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:hover:bg-white"
                     >
                         {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} className="ml-1" />}
                     </button>

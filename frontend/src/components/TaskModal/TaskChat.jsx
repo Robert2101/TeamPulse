@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
 import { MessageSquare, Send, Edit2, Trash2, AlertTriangle, X } from "lucide-react";
 import api from "../../lib/axios";
 import { FileDropZone } from "../files/FileDropZone";
@@ -242,9 +241,9 @@ export const TaskChat = ({ task, project, socket, user }) => {
 
     return (
         <div className="flex h-full w-full flex-col bg-transparent">
-            <div className="border-b border-zinc-800/50 px-6 py-4 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400">
-                    <MessageSquare size={14} className="text-indigo-400" /> Team Discussion
+            <div className="border-b border-gray-200/50 px-6 py-4 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-500">
+                    <MessageSquare size={14} className="text-gray-700" /> Team Discussion
                 </h3>
             </div>
 
@@ -261,9 +260,9 @@ export const TaskChat = ({ task, project, socket, user }) => {
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {loading ? (
-                    <div className="animate-pulse text-zinc-500">Loading discussion...</div>
+                    <div className="animate-pulse text-gray-400">Loading discussion...</div>
                 ) : comments.length === 0 ? (
-                    <div className="text-center text-sm text-zinc-500 mt-10">No comments yet. Start the conversation!</div>
+                    <div className="text-center text-sm text-gray-400 mt-10">No comments yet. Start the conversation!</div>
                 ) : (
                     comments.map(c => {
                         const authorId = typeof c.author === 'object' ? c.author?._id : c.author;
@@ -277,7 +276,7 @@ export const TaskChat = ({ task, project, socket, user }) => {
 
                         return (
                             <div key={c._id} className={`group flex flex-col ${isMe ? "items-end" : "items-start"} mb-4`}>
-                                <span className={`mb-1 text-[10px] text-zinc-500 flex items-center gap-1 ${isMe ? "mr-9" : "ml-9"}`}>
+                                <span className={`mb-1 text-[10px] text-gray-400 flex items-center gap-1 ${isMe ? "mr-9" : "ml-9"}`}>
                                     {authorName} {c.edited && "(edited)"}
                                 </span>
 
@@ -287,48 +286,48 @@ export const TaskChat = ({ task, project, socket, user }) => {
                                             autoFocus
                                             value={editContent}
                                             onChange={(e) => setEditContent(e.target.value)}
-                                            className="w-full rounded-lg border border-indigo-500 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none"
+                                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
                                         />
                                         <div className={`flex gap-3 ${isMe ? "justify-end" : "justify-start"}`}>
-                                            <button onClick={() => setEditingCommentId(null)} className="text-[11px] font-medium text-zinc-400 hover:text-zinc-200">Cancel</button>
-                                            <button onClick={() => handleEditSubmit(c._id)} className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300">Save</button>
+                                            <button onClick={() => setEditingCommentId(null)} className="text-[11px] font-medium text-gray-500 hover:text-gray-800">Cancel</button>
+                                            <button onClick={() => handleEditSubmit(c._id)} className="text-[11px] font-bold text-gray-700 hover:text-gray-900">Save</button>
                                         </div>
                                     </div>
                                 ) : commentToDelete === c._id ? (
-                                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                                    <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
                                         <AlertTriangle size={16} className="text-red-400" />
                                         <span className="text-xs font-medium text-red-200">Delete comment?</span>
                                         <div className="flex gap-2 ml-2">
-                                            <button onClick={() => setCommentToDelete(null)} className="rounded bg-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700">Cancel</button>
-                                            <button onClick={() => confirmDelete(c._id)} className="rounded bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-500">Delete</button>
+                                            <button onClick={() => setCommentToDelete(null)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50">Cancel</button>
+                                            <button onClick={() => confirmDelete(c._id)} className="rounded bg-red-600 px-3 py-1 text-xs font-bold text-gray-900 hover:bg-red-500">Delete</button>
                                         </div>
-                                    </motion.div>
+                                    </div>
                                 ) : (
                                     <div className="relative flex items-end gap-2 max-w-full">
                                         {isMe && !isTemp && (
                                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 mb-2">
-                                                <button onClick={() => { setEditingCommentId(c._id); setEditContent(c.commentContent); }} className="text-zinc-500 hover:text-indigo-400"><Edit2 size={14} /></button>
-                                                <button onClick={() => setCommentToDelete(c._id)} className="text-zinc-500 hover:text-red-400"><Trash2 size={14} /></button>
+                                                <button onClick={() => { setEditingCommentId(c._id); setEditContent(c.commentContent); }} className="text-gray-400 hover:text-gray-700"><Edit2 size={14} /></button>
+                                                <button onClick={() => setCommentToDelete(c._id)} className="text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
                                             </div>
                                         )}
 
                                         {!isMe && (
-                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-800 text-[10px] font-bold text-zinc-400 border border-zinc-700">
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-[10px] font-bold text-gray-700 border border-gray-200">
                                                 {c.author?.profilePicture ? (
                                                     <img src={c.author.profilePicture} alt="User" className="h-full w-full object-cover" />
                                                 ) : (authorName.charAt(0).toUpperCase())}
                                             </div>
                                         )}
 
-                                        <div className={`rounded-2xl px-4 py-3 text-sm ${isMe ? "bg-indigo-600 text-white rounded-br-none" : "bg-zinc-800 text-zinc-100 rounded-bl-none"} max-w-[85%] sm:max-w-[75%]`}>
+                                        <div className={`rounded-2xl px-4 py-3 text-sm border border-gray-200 ${isMe ? "bg-gray-100 text-gray-900 rounded-br-none" : "bg-white text-gray-900 rounded-bl-none"} max-w-[85%] sm:max-w-[75%]`}>
                                             {c.commentContent}
                                             {c.attachments?.length > 0 && c.attachments[0]?.url && c.attachments[0]?.fileType?.startsWith('image/') && (
-                                                <img src={c.attachments[0].url} alt="media" className="mt-3 w-full max-h-[350px] rounded-lg object-contain bg-zinc-950/50 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(c.attachments[0].url, '_blank')} />
+                                                <img src={c.attachments[0].url} alt="media" className="mt-3 w-full max-h-[350px] rounded-lg object-contain bg-gray-50/50 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(c.attachments[0].url, '_blank')} />
                                             )}
                                         </div>
 
                                         {isMe && (
-                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-500/20 text-[10px] font-bold text-indigo-400 border border-indigo-500/30">
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-[10px] font-bold text-gray-700 border border-gray-200">
                                                 {user?.profilePicture ? (
                                                     <img src={user.profilePicture} alt="Me" className="h-full w-full object-cover" />
                                                 ) : (user?.fullName?.charAt(0).toUpperCase() || "U")}
@@ -338,7 +337,7 @@ export const TaskChat = ({ task, project, socket, user }) => {
                                         {/* BUG #9 FIX: Only Admin (not the author) sees action buttons on others' comments */}
                                         {!isMe && isAdminUser && !isTemp && (
                                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 mb-2">
-                                                <button onClick={() => setCommentToDelete(c._id)} className="text-zinc-500 hover:text-red-400"><Trash2 size={14} /></button>
+                                                <button onClick={() => setCommentToDelete(c._id)} className="text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
                                             </div>
                                         )}
                                     </div>
@@ -350,13 +349,13 @@ export const TaskChat = ({ task, project, socket, user }) => {
                 <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-zinc-800 p-4 bg-zinc-950 relative">
+            <div className="border-t border-gray-200 p-4 bg-gray-50 relative">
                 {typingUsers.length > 0 && (
-                    <div className="absolute -top-7 left-4 text-[11px] text-zinc-400 italic flex items-center gap-1">
+                    <div className="absolute -top-7 left-4 text-[11px] text-gray-500 italic flex items-center gap-1">
                         <span className="flex gap-0.5 items-center mr-1 mt-0.5">
-                            <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                            <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                            <span className="h-1 w-1 bg-zinc-400 rounded-full animate-bounce"></span>
+                            <span className="h-1 w-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                            <span className="h-1 w-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                            <span className="h-1 w-1 bg-gray-400 rounded-full animate-bounce"></span>
                         </span>
                         {typingUsers.length > 2 
                             ? `${typingUsers.length} people are typing...` 
@@ -365,9 +364,9 @@ export const TaskChat = ({ task, project, socket, user }) => {
                     </div>
                 )}
                 {commentFile && (
-                    <div className="mb-2 flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5">
-                        <span className="truncate text-xs text-zinc-300">{commentFile.name}</span>
-                        <button onClick={() => setCommentFile(null)} className="ml-auto text-zinc-500 hover:text-red-400"><X size={14} /></button>
+                    <div className="mb-2 flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5">
+                        <span className="truncate text-xs text-gray-700">{commentFile.name}</span>
+                        <button onClick={() => setCommentFile(null)} className="ml-auto text-gray-400 hover:text-red-400"><X size={14} /></button>
                     </div>
                 )}
                 <form onSubmit={handleSendComment} className="flex items-center gap-2">
@@ -377,9 +376,9 @@ export const TaskChat = ({ task, project, socket, user }) => {
                         value={newComment} 
                         onChange={handleInputChange} 
                         placeholder="Type a message..." 
-                        className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900 py-3 pl-4 pr-4 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none" 
+                        className="flex-1 rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-4 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" 
                     />
-                    <button type="submit" disabled={!newComment.trim() && !commentFile} className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+                    <button type="submit" disabled={!newComment.trim() && !commentFile} className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors">
                         <Send size={14} className="ml-0.5" />
                     </button>
                 </form>
