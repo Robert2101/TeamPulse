@@ -1,5 +1,5 @@
 import express from 'express';
-import { signup, login, logout, checkAuth, getWorkspaceUsers, updateUserRole } from '../controllers/auth.controller.js';
+import { signup, login, logout, checkAuth, getWorkspaceUsers, updateUserRole, updateUserStatus } from '../controllers/auth.controller.js';
 import { protectRoute } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -14,5 +14,6 @@ router.get('/check-auth', protectRoute, checkAuth);
 // Workspace Administration Routes
 router.get('/workspace/users', protectRoute, getWorkspaceUsers);
 router.put('/workspace/users/:userId/role', protectRoute, updateUserRole);
+router.put('/workspace/users/:userId/status', protectRoute, updateUserStatus);
 
 export default router;

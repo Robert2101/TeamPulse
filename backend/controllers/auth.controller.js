@@ -75,6 +75,10 @@ export const login = async (req, res) => {
         const user = await User.findOne({ emailAddress }).select('+password');
         if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
+        if (user.status === 'Inactive') {
+            return res.status(403).json({ message: "Your account has been deactivated. Please contact your administrator." });
+        }
+
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
@@ -168,5 +172,37 @@ export const updateUserRole = async (req, res) => {
     } catch (error) {
         logger.error(`Update Role Error: ${error.message}`);
         res.status(500).json({ message: "Failed to update user role" });
+    }
+};
+
+export const updateUserStatus = async (req, res) => {
+    try {
+        if (req.dbUser.role.roleName !== 'Admin') {
+            return res.status(403).json({ message: "Only Admins can change user status" });
+        }
+
+        const { userId } = req.params;
+        const { status } = req.body; // "Active" or "Inactive"
+
+        if (userId === req.dbUser._id.toString()) {
+            return res.status(400).json({ message: "Cannot deactivate your own Admin account" });
+        }
+
+        if (!['Active', 'Inactive'].includes(status)) {
+            return res.status(400).json({ message: "Invalid status value. Must be 'Active' or 'Inactive'" });
+        }
+
+        const targetUser = await User.findOne({ _id: userId, workspace: req.dbUser.workspace._id });
+        if (!targetUser) {
+            return res.status(404).json({ message: "User not found in your workspace" });
+        }
+
+        targetUser.status = status;
+        await targetUser.save();
+
+        res.status(200).json({ message: `User status updated to ${status}` });
+    } catch (error) {
+        logger.error(`Update Status Error: ${error.message}`);
+        res.status(500).json({ message: "Failed to update user status" });
     }
 };

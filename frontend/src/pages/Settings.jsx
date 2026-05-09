@@ -44,6 +44,21 @@ export const Settings = () => {
         }
     };
 
+    const handleStatusChange = async (targetUserId, newStatus) => {
+        try {
+            await api.put(`/auth/workspace/users/${targetUserId}/status`, { status: newStatus });
+            
+            // Update local state to reflect change immediately
+            setWorkspaceUsers(prev => prev.map(u => 
+                u._id === targetUserId 
+                  ? { ...u, status: newStatus } 
+                  : u
+            ));
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to update status");
+        }
+    };
+
     const handleAvatarChange = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -160,8 +175,8 @@ export const Settings = () => {
                             <span className="text-gray-700 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-200">
                                 <Shield size={14} /> {user?.role?.roleName || "Team Member"}
                             </span>
-                            <span className="text-gray-700 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-200">
-                                Active Status
+                            <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${user?.status === 'Inactive' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                                {user?.status || "Active"} Status
                             </span>
                         </div>
 
@@ -213,20 +228,34 @@ export const Settings = () => {
                                         </div>
                                     </div>
 
-                                    {/* Role Management Dropdown */}
-                                    <div className="flex items-center gap-3 w-full md:w-auto">
-                                        <span className="text-xs text-gray-400 uppercase tracking-widest">Role</span>
-                                        <select
-                                            disabled={member._id === user._id}
-                                            value={member.role?.roleName}
-                                            onChange={(e) => handleRoleChange(member._id, e.target.value)}
-                                            className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none disabled:opacity-50"
-                                        >
-                                            <option value="Admin">Admin</option>
-                                            <option value="Project Manager">Project Manager</option>
-                                            <option value="Team Member">Team Member</option>
-                                            <option value="Stakeholder">Stakeholder</option>
-                                        </select>
+                                    {/* Role & Status Management */}
+                                    <div className="flex flex-col md:flex-row items-end md:items-center gap-4 w-full md:w-auto">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs text-gray-400 uppercase tracking-widest">Role</span>
+                                            <select
+                                                disabled={member._id === user._id}
+                                                value={member.role?.roleName}
+                                                onChange={(e) => handleRoleChange(member._id, e.target.value)}
+                                                className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none disabled:opacity-50"
+                                            >
+                                                <option value="Admin">Admin</option>
+                                                <option value="Project Manager">Project Manager</option>
+                                                <option value="Team Member">Team Member</option>
+                                                <option value="Stakeholder">Stakeholder</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs text-gray-400 uppercase tracking-widest">Status</span>
+                                            <select
+                                                disabled={member._id === user._id}
+                                                value={member.status || "Active"}
+                                                onChange={(e) => handleStatusChange(member._id, e.target.value)}
+                                                className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none disabled:opacity-50"
+                                            >
+                                                <option value="Active">Active</option>
+                                                <option value="Inactive">Inactive</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             ))}

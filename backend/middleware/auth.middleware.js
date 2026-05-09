@@ -17,6 +17,10 @@ export const protectRoute = async (req, res, next) => {
             return res.status(401).json({ message: "User no longer exists." });
         }
 
+        if (user.status === 'Inactive') {
+            return res.status(403).json({ message: "Your account has been deactivated. Please contact your administrator." });
+        }
+
         req.dbUser = user;
         next();
     } catch (error) {
