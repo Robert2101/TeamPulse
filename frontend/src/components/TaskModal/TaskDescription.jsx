@@ -30,6 +30,7 @@ export const TaskDescription = ({ task }) => {
                             Completed on: {new Date(task.completedAt).toLocaleDateString()}
                         </span>
                     )}
+                </div>
             </div>
             {task.updatedBy && (
                 <div className="text-xs text-gray-400 italic">
