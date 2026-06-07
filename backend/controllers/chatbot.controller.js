@@ -129,7 +129,7 @@ export const askChatbot = async (req, res) => {
                             },
                             newStatus: {
                                 type: "STRING",
-                                description: "The new status. Must be 'To Do', 'In Progress', 'In Review', or 'Done'."
+                                description: "The new status. Must be 'To-Do', 'In-Progress', 'Review', or 'Done'."
                             }
                         },
                         required: ["taskId", "newStatus"]
@@ -179,7 +179,7 @@ export const askChatbot = async (req, res) => {
                             if (!updatedTask) {
                                 botReply = "I couldn't verify your permission to update this task, or the task doesn't exist.";
                             } else {
-                                botReply = `Got it! I have successfully updated the status of "${updatedTask.taskName}" to **${updatedTask.taskStatus}**.`;
+                                botReply = `Got it! I have successfully updated the status of "${updatedTask.taskName}" to ${updatedTask.taskStatus}.`;
                                 intent = "task_update";
                             }
                         } catch (err) {

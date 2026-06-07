@@ -67,7 +67,7 @@ export const initSocket = (server) => {
                 // Role-Based Security for WebSocket Rooms
                 const isAdmin = socket.dbUser.role?.roleName === 'Admin';
                 const isManager = project.projectManager.toString() === socket.dbUser._id.toString();
-                const isMember = project.assignedTeamMembers.includes(socket.dbUser._id);
+                const isMember = project.assignedTeamMembers.some(id => id.toString() === socket.dbUser._id.toString());
 
                 if (isAdmin || isManager || isMember) {
                     socket.join(projectId);

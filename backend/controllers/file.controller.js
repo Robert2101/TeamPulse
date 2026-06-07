@@ -59,7 +59,7 @@ export const uploadFile = async (req, res) => {
 
         const populated = await fileAsset.populate('uploadedBy', 'fullName');
 
-        await logActivity(req.dbUser._id, 'Uploaded File', entityType, finalEntityId, { fileName: req.file.originalname, fileId: fileAsset._id });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Uploaded File', entityType, finalEntityId, { fileName: req.file.originalname, fileId: fileAsset._id });
 
         if (projectIdToBroadcast) {
             getIO().to(projectIdToBroadcast.toString()).emit('file-uploaded', { entityType, entityId: finalEntityId, file: populated });
@@ -95,7 +95,7 @@ export const getFilesByEntity = async (req, res) => {
             if (project) {
                 const isAdmin = req.dbUser.role.roleName === 'Admin';
                 const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-                const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+                const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
                 if (!isAdmin && !isManager && !isMember) {
                     return res.status(403).json({ message: "Access Denied." });
                 }
@@ -140,7 +140,7 @@ export const deleteFile = async (req, res) => {
         }
 
         await FileAsset.findByIdAndDelete(fileId);
-        await logActivity(req.dbUser._id, 'Deleted File', file.entityType, file.entityId, { fileName: file.name });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted File', file.entityType, file.entityId, { fileName: file.name });
 
         if (projectIdToBroadcast) {
             getIO().to(projectIdToBroadcast.toString()).emit('file-deleted', { entityType: file.entityType, entityId: file.entityId, fileId });

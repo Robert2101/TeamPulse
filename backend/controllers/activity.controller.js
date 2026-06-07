@@ -16,7 +16,7 @@ export const getActivityLogs = async (req, res) => {
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
         const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
 
         if (!isAdmin && !isManager && !isMember) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to read logs of an unauthorized project.`);

@@ -20,7 +20,7 @@ export const addComment = async (req, res) => {
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
         const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
 
         if (!isAdmin && !isManager && !isMember) {
             return res.status(403).json({ message: "Access Denied. You cannot comment on this task." });
@@ -46,7 +46,7 @@ export const addComment = async (req, res) => {
             comment: savedComment
         });
 
-        await logActivity(req.dbUser._id, 'Added Comment', 'Comment', savedComment._id, { taskId });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Added Comment', 'Comment', savedComment._id, { taskId });
 
         res.status(201).json({ message: "Comment added", comment: savedComment });
 
@@ -69,7 +69,7 @@ export const getCommentsByTask = async (req, res) => {
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
         const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
 
         if (!isAdmin && !isManager && !isMember) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to read comments on unauthorized task ${taskId}`);
@@ -113,7 +113,7 @@ export const editComment = async (req, res) => {
         updatedComment = await updatedComment.populate('author', 'fullName profilePicture');
         updatedComment = await updatedComment.populate('attachments');
 
-        await logActivity(req.dbUser._id, 'Edited Comment', 'Comment', updatedComment._id, { taskId: comment.task });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Edited Comment', 'Comment', updatedComment._id, { taskId: comment.task });
 
         const taskObj = await Task.findById(comment.task);
         if (taskObj) {
@@ -145,7 +145,7 @@ export const deleteComment = async (req, res) => {
 
         await Task.findByIdAndUpdate(comment.task, { $pull: { comments: id } });
 
-        await logActivity(req.dbUser._id, 'Deleted Comment', 'Comment', id, { taskId: comment.task });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Comment', 'Comment', id, { taskId: comment.task });
 
         if (taskObj) {
             getIO().to(taskObj.projectReference.toString()).emit('comment-deleted', id);

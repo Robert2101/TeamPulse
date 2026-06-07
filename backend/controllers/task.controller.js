@@ -20,7 +20,7 @@ export const createTask = async (req, res) => {
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
         const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
 
         if (!isAdmin && !isManager && !isMember) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to create a task in an unauthorized project.`);
@@ -41,7 +41,7 @@ export const createTask = async (req, res) => {
 
         const savedTask = await newTask.save();
 
-        await logActivity(req.dbUser._id, 'Created Task', 'Task', savedTask._id, { taskName, project: projectReference });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Created Task', 'Task', savedTask._id, { taskName, project: projectReference });
 
         logger.info(`Task created: '${taskName}' in Project '${projectReference}' by User ID: ${req.dbUser._id}`);
 
@@ -76,7 +76,7 @@ export const getTasksByProject = async (req, res) => {
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
         const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
 
         if (!isAdmin && !isManager && !isMember) {
             logger.warn(`Unauthorized task access attempt by User ${req.dbUser.emailAddress} on Project ${projectId}`);
@@ -113,7 +113,7 @@ export const updateTask = async (req, res) => {
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
         const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.includes(req.dbUser._id);
+        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
 
         if (!isAdmin && !isManager && !isMember) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to update Task ${id} in an unauthorized project.`);
@@ -145,7 +145,7 @@ export const updateTask = async (req, res) => {
 
         const populatedTask = await Task.findById(updatedTask._id).populate('assignee', 'fullName emailAddress');
 
-        await logActivity(req.dbUser._id, `Updated Task to ${populatedTask.taskStatus}`, 'Task', populatedTask._id, {
+        await logActivity(req.dbUser._id, req.dbUser.workspace, `Updated Task to ${populatedTask.taskStatus}`, 'Task', populatedTask._id, {
             taskName: populatedTask.taskName,
             newStatus: populatedTask.taskStatus
         });
@@ -186,7 +186,7 @@ export const deleteTask = async (req, res) => {
 
         await Comment.deleteMany({ task: id });
 
-        await logActivity(req.dbUser._id, 'Deleted Task', 'Task', id, { taskName: task.taskName });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Task', 'Task', id, { taskName: task.taskName });
 
         logger.info(`Cascade Delete Executed: Task '${task.taskName}' and its comments deleted by User ID: ${req.dbUser._id}`);
         res.status(200).json({ message: "Task and associated comments deleted successfully." });

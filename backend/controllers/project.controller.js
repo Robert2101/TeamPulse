@@ -46,7 +46,7 @@ export const createProject = async (req, res) => {
 
         const savedProject = await newProject.save();
 
-        await logActivity(req.dbUser._id, 'Created Project', 'Project', savedProject._id, { projectName });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Created Project', 'Project', savedProject._id, { projectName });
 
         logger.info(`Project created: '${projectName}' by User ID: ${req.dbUser._id}`);
         res.status(201).json({ message: "Project created successfully", project: savedProject });
@@ -139,7 +139,7 @@ export const updateProject = async (req, res) => {
         ).populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress profilePicture');
 
-        await logActivity(req.dbUser._id, 'Updated Project', 'Project', updatedProject._id, { projectName: updatedProject.projectName });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Updated Project', 'Project', updatedProject._id, { projectName: updatedProject.projectName });
 
         logger.info(`Project updated: '${updatedProject.projectName}' (ID: ${id}) by User ID: ${req.dbUser._id}`);
         res.status(200).json({ message: "Project updated successfully", project: updatedProject });
@@ -178,7 +178,7 @@ export const deleteProject = async (req, res) => {
             await Comment.deleteMany({ task: { $in: taskIds } });
         }
 
-        await logActivity(req.dbUser._id, 'Deleted Project', 'Project', id, { projectName: project.projectName });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Project', 'Project', id, { projectName: project.projectName });
 
         logger.info(`Cascade Delete Executed: Project '${project.projectName}' (ID: ${id}), ${taskIds.length} tasks, and related comments deleted by User ID: ${req.dbUser._id}`);
         res.status(200).json({ message: "Project, associated tasks, and comments deleted successfully." });
