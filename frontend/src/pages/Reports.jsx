@@ -34,54 +34,31 @@ export const Reports = () => {
 
     useEffect(() => {
         const fetchDashboardData = async () => {
-            if (projects.length === 0) {
-                setLoading(false);
-                return;
-            }
-
             try {
-                const taskPromises = projects.map((p) =>
-                    api.get(`/tasks/project/${p._id}`)
-                );
-
-                const results = await Promise.all(taskPromises);
-                const allTasks = results.flatMap((r) => r.data);
-
                 if (isAdmin) {
+                    if (projects.length === 0) {
+                        setLoading(false);
+                        return;
+                    }
                     // ADMIN COMMAND CENTER LOGIC
+                    const taskPromises = projects.map((p) =>
+                        api.get(`/tasks/project/${p._id}`)
+                    );
+                    const results = await Promise.all(taskPromises);
+                    const allTasks = results.flatMap((r) => r.data);
+
                     setGlobalStats({
-                        todo: allTasks.filter(
-                            (t) => t.taskStatus === "To-Do"
-                        ).length,
-                        inProgress: allTasks.filter(
-                            (t) => t.taskStatus === "In-Progress"
-                        ).length,
-                        review: allTasks.filter(
-                            (t) => t.taskStatus === "Review"
-                        ).length,
-                        done: allTasks.filter(
-                            (t) => t.taskStatus === "Done"
-                        ).length,
-                        urgent: allTasks.filter(
-                            (t) =>
-                                t.priority === "Urgent" &&
-                                t.taskStatus !== "Done"
-                        ).length,
+                        todo: allTasks.filter((t) => t.taskStatus === "To-Do").length,
+                        inProgress: allTasks.filter((t) => t.taskStatus === "In-Progress").length,
+                        review: allTasks.filter((t) => t.taskStatus === "Review").length,
+                        done: allTasks.filter((t) => t.taskStatus === "Done").length,
+                        urgent: allTasks.filter((t) => t.priority === "Urgent" && t.taskStatus !== "Done").length,
                         total: allTasks.length,
                     });
                 } else {
                     // PERSONAL WORKSPACE LOGIC
-                    const myPersonalTasks = allTasks.filter(
-                        (t) => t.assignee?._id === user?._id
-                    );
-
-                    setMyTasks(
-                        myPersonalTasks.sort(
-                            (a, b) =>
-                                new Date(a.dueDate) -
-                                new Date(b.dueDate)
-                        )
-                    );
+                    const res = await api.get('/tasks/mine');
+                    setMyTasks(res.data);
                 }
             } catch (err) {
                 console.error("Failed to load dashboard data", err);

@@ -95,7 +95,7 @@ export const login = async (req, res) => {
             maxAge: 24 * 60 * 60 * 1000 // 1 day
         });
         
-        const populatedUser = await User.findById(user._id).populate('role').populate('workspace');
+        const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
         res.status(200).json({ message: "Login successful", user: populatedUser });
     } catch (error) {
         logger.error(`Login Error Detail: ${error.message}`);
@@ -204,5 +204,29 @@ export const updateUserStatus = async (req, res) => {
     } catch (error) {
         logger.error(`Update Status Error: ${error.message}`);
         res.status(500).json({ message: "Failed to update user status" });
+    }
+};
+
+export const updateProfile = async (req, res) => {
+    try {
+        const { fullName, emailAddress, phoneNumber, password } = req.body;
+        const user = await User.findById(req.dbUser._id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        if (fullName) user.fullName = fullName;
+        if (emailAddress) user.emailAddress = emailAddress;
+        if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+
+        if (password) {
+            const salt = await bcrypt.genSalt(10);
+            user.password = await bcrypt.hash(password, salt);
+        }
+
+        await user.save();
+        const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
+        res.status(200).json({ message: "Profile updated successfully", user: populatedUser });
+    } catch (error) {
+        logger.error(`Update Profile Error: ${error.message}`);
+        res.status(500).json({ message: "Failed to update profile" });
     }
 };

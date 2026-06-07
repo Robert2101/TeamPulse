@@ -86,6 +86,7 @@ export const getTasksByProject = async (req, res) => {
         const tasks = await Task.find({ projectReference: projectId, workspace: req.dbUser.workspace })
             .populate('assignee', 'fullName emailAddress profilePicture')
             .populate('createdBy', 'fullName')
+            .populate('updatedBy', 'fullName')
             .sort({ createdAt: -1 });
 
         res.status(200).json(tasks);
@@ -93,6 +94,18 @@ export const getTasksByProject = async (req, res) => {
     } catch (error) {
         logger.error(`Error fetching tasks for project ${req.params.projectId}: ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: "Internal server error while fetching tasks." });
+    }
+};
+
+export const getMyTasks = async (req, res) => {
+    try {
+        const tasks = await Task.find({ assignee: req.dbUser._id, workspace: req.dbUser.workspace })
+            .populate('projectReference', 'projectName')
+            .sort({ dueDate: 1 });
+        res.status(200).json(tasks);
+    } catch (error) {
+        logger.error(`Error fetching user tasks: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ message: "Internal server error while fetching user tasks." });
     }
 };
 
@@ -143,7 +156,9 @@ export const updateTask = async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        const populatedTask = await Task.findById(updatedTask._id).populate('assignee', 'fullName emailAddress');
+        const populatedTask = await Task.findById(updatedTask._id)
+            .populate('assignee', 'fullName emailAddress')
+            .populate('updatedBy', 'fullName');
 
         await logActivity(req.dbUser._id, req.dbUser.workspace, `Updated Task to ${populatedTask.taskStatus}`, 'Task', populatedTask._id, {
             taskName: populatedTask.taskName,
@@ -187,6 +202,8 @@ export const deleteTask = async (req, res) => {
         await Comment.deleteMany({ task: id });
 
         await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Task', 'Task', id, { taskName: task.taskName });
+
+        getIO().to(task.projectReference.toString()).emit('task-deleted', { taskId: id });
 
         logger.info(`Cascade Delete Executed: Task '${task.taskName}' and its comments deleted by User ID: ${req.dbUser._id}`);
         res.status(200).json({ message: "Task and associated comments deleted successfully." });

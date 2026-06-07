@@ -54,12 +54,21 @@ export const ProjectBoard = () => {
         });
 
         socket.on("task-created", (newTask) => {
-            setTasks(prevTasks => [newTask, ...prevTasks]);
+            setTasks(prevTasks => {
+                if (prevTasks.some(t => t._id === newTask._id)) return prevTasks;
+                return [newTask, ...prevTasks];
+            });
+        });
+
+        socket.on("task-deleted", ({ taskId }) => {
+            setTasks(prev => prev.filter(t => t._id !== taskId));
+            if (selectedTask?._id === taskId) setSelectedTask(null);
         });
 
         return () => {
             socket.off("task-updated");
             socket.off("task-created");
+            socket.off("task-deleted");
         };
     }, [socket]);
 

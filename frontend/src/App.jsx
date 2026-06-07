@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useEffect } from "react";
 import { useStore } from "./store/useStore";
 
@@ -28,13 +28,20 @@ export default function App() {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div
-         
-         
-          className="h-12 w-12 rounded-full border-t-2 border-indigo-500"
+          className="h-12 w-12 animate-spin rounded-full border-t-2 border-indigo-500"
         />
       </div>
     );
   }
+
+  const ProtectedLayout = () => {
+    if (!user) return <Navigate to="/" />;
+    return (
+      <DashboardLayout>
+        <Outlet />
+      </DashboardLayout>
+    );
+  };
 
   return (
     <BrowserRouter>
@@ -45,14 +52,19 @@ export default function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
 
-          {/* Protected Routes */}
-          <Route path="/dashboard" element={user ? <DashboardLayout><Reports /></DashboardLayout> : <Navigate to="/" />} />
-          <Route path="/projects" element={user ? <DashboardLayout><ProjectList /></DashboardLayout> : <Navigate to="/" />} />
-          <Route path="/project/:id" element={user ? <DashboardLayout><ProjectBoard /></DashboardLayout> : <Navigate to="/" />} />
-          <Route path="/tasks" element={user ? <DashboardLayout><MyTasks /></DashboardLayout> : <Navigate to="/" />} />
-          <Route path="/ai-chat" element={user ? <DashboardLayout><AiChat /></DashboardLayout> : <Navigate to="/" />} />
-          <Route path="/activity" element={user ? <DashboardLayout><ActivityLog /></DashboardLayout> : <Navigate to="/" />} />
-          <Route path="/settings" element={user ? <DashboardLayout><Settings /></DashboardLayout> : <Navigate to="/" />} />
+          {/* Protected Routes with Nested Layout */}
+          <Route element={<ProtectedLayout />}>
+            <Route path="/dashboard" element={user?.role?.viewReports ? <Reports /> : <Navigate to="/projects" />} />
+            <Route path="/projects" element={<ProjectList />} />
+            <Route path="/project/:id" element={<ProjectBoard />} />
+            <Route path="/tasks" element={<MyTasks />} />
+            <Route path="/ai-chat" element={<AiChat />} />
+            <Route path="/activity" element={user?.role?.viewReports ? <ActivityLog /> : <Navigate to="/projects" />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+
+          {/* Catch-all 404 */}
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </>
     </BrowserRouter>

@@ -9,7 +9,7 @@ export const TaskDetailsModal = ({ task, project, onClose, socket }) => {
 
     // --- RBAC PERMISSIONS ---
     const isAdmin = user?.role?.roleName === 'Admin';
-    const isProjectManager = project?.projectManager?._id === user?._id || project?.projectManager === user?._id;
+    const isProjectManager = project?.projectManager?._id?.toString() === user?._id?.toString() || project?.projectManager?.toString() === user?._id?.toString();
     const canAssignMembers = isAdmin || isProjectManager;
 
     return (

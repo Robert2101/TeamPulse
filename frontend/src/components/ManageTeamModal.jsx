@@ -61,7 +61,23 @@ export const ManageTeamModal = ({ project, onTeamUpdated }) => {
                                         </div>
                                         <span className="text-sm text-gray-800">{member.fullName || member.emailAddress || member}</span>
                                     </div>
-                                    <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">Member</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">Member</span>
+                                        <button 
+                                            onClick={async () => {
+                                                try {
+                                                    const updatedMembers = project.assignedTeamMembers.filter(m => (m._id || m) !== (member._id || member));
+                                                    const res = await api.put(`/projects/${project._id}`, { assignedTeamMembers: updatedMembers.map(m => m._id || m) });
+                                                    onTeamUpdated(res.data.project);
+                                                } catch (err) {
+                                                    setError("Failed to remove member.");
+                                                }
+                                            }}
+                                            className="text-red-400 hover:text-red-500 p-1"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))
                         ) : (

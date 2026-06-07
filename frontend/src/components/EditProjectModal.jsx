@@ -21,6 +21,8 @@ export const EditProjectModal = ({ api, project, onProjectUpdated }) => {
         projectStatus: project.projectStatus || "Active",
         priority: project.priority || "Medium",
         budget: project.budget || 0,
+        startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : "",
+        endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : "",
     });
 
     const handleSubmit = async (e) => {
@@ -54,7 +56,7 @@ export const EditProjectModal = ({ api, project, onProjectUpdated }) => {
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) setConfirmDelete(false); }}>
             <DialogTrigger asChild>
                 <button
                    
@@ -126,15 +128,37 @@ export const EditProjectModal = ({ api, project, onProjectUpdated }) => {
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="budget" className="text-gray-500">Budget ($)</Label>
-                            <Input
-                                id="budget"
-                                type="number"
-                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                value={formData.budget}
-                                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                            />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="budget" className="text-gray-500">Budget ($)</Label>
+                                <Input
+                                    id="budget"
+                                    type="number"
+                                    className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
+                                    value={formData.budget}
+                                    onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="startDate" className="text-gray-500">Start Date</Label>
+                                <Input
+                                    id="startDate"
+                                    type="date"
+                                    className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
+                                    value={formData.startDate}
+                                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="endDate" className="text-gray-500">End Date</Label>
+                                <Input
+                                    id="endDate"
+                                    type="date"
+                                    className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
+                                    value={formData.endDate}
+                                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                />
+                            </div>
                         </div>
                     </form>
 

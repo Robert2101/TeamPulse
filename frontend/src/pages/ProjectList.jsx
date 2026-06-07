@@ -2,11 +2,13 @@ import { CreateProjectModal } from "../components/CreateProjectModal";
 import { useStore } from "../store/useStore";
 import api from "../lib/axios";
 import { Users, UserCircle, Calendar, DollarSign, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export const ProjectList = () => {
     const { projects, user } = useStore();
     const isAdmin = user?.role?.roleName === 'Admin';
     const canCreateProject = user?.role?.manageProjects || isAdmin;
+    const navigate = useNavigate();
 
     // Helper to get initials for avatars
     const getInitials = (name) => {
@@ -55,7 +57,7 @@ export const ProjectList = () => {
                                
                                
                                 key={project._id}
-                                onClick={() => window.location.href = `/project/${project._id}`}
+                                onClick={() => navigate(`/project/${project._id}`)}
                                 className="group relative flex flex-col justify-between rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md transition-all hover:border-gray-300 hover:shadow-xl cursor-pointer"
                             >
                                 {/* Top Section: Title & Badges */}

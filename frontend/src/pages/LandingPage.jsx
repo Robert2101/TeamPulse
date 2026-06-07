@@ -1,7 +1,10 @@
 import GradientBlinds from "../components/GradientBlinds";
 import ScrollStack, { ScrollStackItem } from "../components/ScrollStack";
 
+import { useNavigate } from "react-router-dom";
+
 export const LandingPage = () => {
+    const navigate = useNavigate();
     const features = [
         { title: "Kanban Precision", description: "Manage tasks with clean drag-and-drop movement that syncs via WebSockets.", tag: "Workflow", color: "from-gray-100 to-white" },
         { title: "AI Assistant", description: "Ask for project summaries or help finding tasks directly in your dashboard.", tag: "Assistant", color: "from-gray-100 to-white" },
@@ -66,7 +69,7 @@ export const LandingPage = () => {
                         className="flex gap-4 justify-center pointer-events-auto"
                     >
                         <button
-                            onClick={() => window.location.href = '/login'}
+                            onClick={() => navigate('/login')}
                             className="rounded-full border border-gray-300 bg-white px-8 py-4 font-semibold text-gray-900 shadow-sm hover:bg-gray-100 transition-colors cursor-pointer"
                         >
                             Get Started Free
@@ -111,7 +114,7 @@ export const LandingPage = () => {
             <section className="flex h-[50vh] flex-col items-center justify-center border-t border-gray-200 bg-gray-50 z-10">
                 <h2 className="text-3xl font-bold text-gray-900">Ready to take control?</h2>
                 <button
-                    onClick={() => window.location.href = '/register'}
+                    onClick={() => navigate('/register')}
                     className="mt-8 rounded-full border border-gray-300 bg-white px-8 py-4 font-semibold text-gray-900 shadow-sm hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                     Create your workspace

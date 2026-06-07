@@ -11,16 +11,9 @@ export const MyTasks = () => {
 
     useEffect(() => {
         const fetchMyTasks = async () => {
-            if (projects.length === 0) return setLoading(false);
             try {
-                // Fetch all tasks from all active projects
-                const taskPromises = projects.map(p => api.get(`/tasks/project/${p._id}`));
-                const results = await Promise.all(taskPromises);
-                const allTasks = results.flatMap(r => r.data);
-
-                // Filter to only show tasks assigned to the logged-in user
-                const userTasks = allTasks.filter(t => t.assignee?._id === user?._id);
-                setMyTasks(userTasks);
+                const res = await api.get('/tasks/mine');
+                setMyTasks(res.data);
             } catch (err) {
                 console.error("Failed to load your tasks", err);
             } finally {
@@ -28,7 +21,7 @@ export const MyTasks = () => {
             }
         };
         fetchMyTasks();
-    }, [projects, user]);
+    }, []);
 
     return (
         <div className="max-w-5xl mx-auto space-y-6">

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useStore } from "../store/useStore";
-import { User, Mail, Shield, Camera, CheckCircle, AlertCircle, Users, Loader2 } from "lucide-react";
+import { User, Mail, Shield, Camera, CheckCircle, AlertCircle, Users, Loader2, Edit3, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import api from "../lib/axios";
 
 export const Settings = () => {
@@ -10,6 +12,14 @@ export const Settings = () => {
     const [workspaceUsers, setWorkspaceUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const fileInputRef = useRef(null);
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [profileLoading, setProfileLoading] = useState(false);
+    const [profileData, setProfileData] = useState({
+        fullName: user?.fullName || "",
+        emailAddress: user?.emailAddress || "",
+        phoneNumber: user?.phoneNumber || "",
+        password: ""
+    });
 
     // Fetch workspace users if the user is an Admin
     useEffect(() => {
@@ -89,6 +99,21 @@ export const Settings = () => {
         }
     };
 
+    const handleProfileUpdate = async (e) => {
+        e.preventDefault();
+        setProfileLoading(true);
+        try {
+            const res = await api.put('/auth/profile', profileData);
+            updateUser(res.data.user);
+            setIsEditingProfile(false);
+            setProfileData({ ...profileData, password: "" }); // Clear password
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to update profile");
+        } finally {
+            setProfileLoading(false);
+        }
+    };
+
     return (
         <div className="max-w-3xl mx-auto space-y-8">
             <div>
@@ -154,7 +179,18 @@ export const Settings = () => {
                                             {user?.workspace?.inviteCode || '------'}
                                         </span>
                                         <button
-                                            onClick={() => navigator.clipboard.writeText(user?.workspace?.inviteCode)}
+                                            onClick={async () => {
+                                                try {
+                                                    await navigator.clipboard.writeText(user?.workspace?.inviteCode);
+                                                } catch (err) {
+                                                    const textArea = document.createElement("textarea");
+                                                    textArea.value = user?.workspace?.inviteCode;
+                                                    document.body.appendChild(textArea);
+                                                    textArea.select();
+                                                    try { document.execCommand('copy'); } catch (e) { console.error(e); }
+                                                    document.body.removeChild(textArea);
+                                                }
+                                            }}
                                             className="text-gray-700 opacity-60 transition-opacity hover:opacity-100"
                                             title="Copy to clipboard"
                                         >
@@ -166,32 +202,78 @@ export const Settings = () => {
                         </div>
                     </div>
 
-                    <div>
-                        <h3 className="text-2xl font-bold text-gray-900">{user?.fullName}</h3>
-                        <p className="text-gray-500 flex items-center gap-2 mt-2">
-                            <Mail size={16} /> {user?.emailAddress}
-                        </p>
-                        <div className="flex flex-wrap gap-3 mt-3">
-                            <span className="text-gray-700 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-200">
-                                <Shield size={14} /> {user?.role?.roleName || "Team Member"}
-                            </span>
-                            <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${user?.status === 'Inactive' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                                {user?.status || "Active"} Status
-                            </span>
-                        </div>
+                    <div className="flex-1 w-full">
+                        {isEditingProfile ? (
+                            <form onSubmit={handleProfileUpdate} className="space-y-4 w-full max-w-md">
+                                <div className="space-y-1">
+                                    <Label>Full Name</Label>
+                                    <Input value={profileData.fullName} onChange={e => setProfileData({...profileData, fullName: e.target.value})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label>Email</Label>
+                                    <Input type="email" value={profileData.emailAddress} onChange={e => setProfileData({...profileData, emailAddress: e.target.value})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label>Phone Number</Label>
+                                    <Input type="tel" value={profileData.phoneNumber} onChange={e => setProfileData({...profileData, phoneNumber: e.target.value})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label>New Password <span className="text-gray-400 text-xs">(optional)</span></Label>
+                                    <Input type="password" placeholder="Leave blank to keep current" value={profileData.password} onChange={e => setProfileData({...profileData, password: e.target.value})} />
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                    <button type="button" onClick={() => setIsEditingProfile(false)} className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" disabled={profileLoading} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+                                        {profileLoading ? <Loader2 className="animate-spin" size={16} /> : "Save Changes"}
+                                    </button>
+                                </div>
+                            </form>
+                        ) : (
+                            <>
+                                <div className="flex items-center gap-3">
+                                    <h3 className="text-2xl font-bold text-gray-900">{user?.fullName}</h3>
+                                    <button onClick={() => setIsEditingProfile(true)} className="text-gray-400 hover:text-indigo-600 transition-colors" title="Edit Profile">
+                                        <Edit3 size={16} />
+                                    </button>
+                                </div>
+                                <p className="text-gray-500 flex items-center gap-2 mt-2">
+                                    <Mail size={16} /> {user?.emailAddress}
+                                </p>
+                                {user?.phoneNumber && (
+                                    <p className="text-gray-500 flex items-center gap-2 mt-2">
+                                        <span className="font-medium text-xs">Phone:</span> {user.phoneNumber}
+                                    </p>
+                                )}
+                                {user?.isVerified && (
+                                    <p className="text-emerald-500 flex items-center gap-2 mt-2 text-xs">
+                                        <CheckCircle size={14} /> Verified Account
+                                    </p>
+                                )}
+                                <div className="flex flex-wrap gap-3 mt-3">
+                                    <span className="text-gray-700 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-200">
+                                        <Shield size={14} /> {user?.role?.roleName || "Team Member"}
+                                    </span>
+                                    <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${user?.status === 'Inactive' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                                        {user?.status || "Active"} Status
+                                    </span>
+                                </div>
 
-                        {/* Upload feedback */}
-                        {uploadStatus === 'success' && (
-                            <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-700">
-                                <CheckCircle size={13} /> Profile picture updated successfully.
-                            </p>
+                                {/* Upload feedback */}
+                                {uploadStatus === 'success' && (
+                                    <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-700">
+                                        <CheckCircle size={13} /> Profile picture updated successfully.
+                                    </p>
+                                )}
+                                {uploadStatus === 'error' && (
+                                    <p className="mt-2 flex items-center gap-1.5 text-xs text-red-400">
+                                        <AlertCircle size={13} /> Failed to upload. Please try again.
+                                    </p>
+                                )}
+                                <p className="mt-2 text-xs text-gray-400">Click the camera icon to update your profile picture.</p>
+                            </>
                         )}
-                        {uploadStatus === 'error' && (
-                            <p className="mt-2 flex items-center gap-1.5 text-xs text-red-400">
-                                <AlertCircle size={13} /> Failed to upload. Please try again.
-                            </p>
-                        )}
-                        <p className="mt-2 text-xs text-gray-400">Click the camera icon to update your profile picture.</p>
                     </div>
                 </div>
 
@@ -225,6 +307,7 @@ export const Settings = () => {
                                         <div>
                                             <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
                                             <p className="text-xs text-gray-400">{member.emailAddress}</p>
+                                            {member.lastLogin && <p className="text-[10px] text-gray-400 mt-1">Last Login: {new Date(member.lastLogin).toLocaleDateString()}</p>}
                                         </div>
                                     </div>
 

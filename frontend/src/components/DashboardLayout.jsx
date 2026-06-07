@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "./Sidebar";
+import { useLocation, Outlet } from "react-router-dom";
 import { useStore } from "../store/useStore";
 import api from "../lib/axios";
 
@@ -9,6 +10,7 @@ export const DashboardLayout = ({ children }) => {
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     useEffect(() => {
+        if (projects.length > 0) return;
         const fetchProjects = async () => {
             try {
                 const response = await api.get("/projects");
@@ -18,10 +20,11 @@ export const DashboardLayout = ({ children }) => {
             }
         };
         fetchProjects();
-    }, [setProjects]);
+    }, [projects.length, setProjects]);
 
+    const location = useLocation();
     // Extract the current path to make a sleek breadcrumb
-    const pathName = window.location.pathname.replace('/', '');
+    const pathName = location.pathname.replace('/', '');
     let capitalizedPath = pathName ? pathName.charAt(0).toUpperCase() + pathName.slice(1) : 'Overview';
 
     // check if it's a project path
@@ -52,7 +55,7 @@ export const DashboardLayout = ({ children }) => {
 
                 {/* Scrollable Content Area */}
                 <div className="flex-1 px-8 pb-12 pt-6">
-                    {children}
+                    {children || <Outlet />}
                 </div>
             </main>
         </div>

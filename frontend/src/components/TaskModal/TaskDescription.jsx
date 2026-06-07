@@ -25,8 +25,17 @@ export const TaskDescription = ({ task }) => {
                         <span className="h-2 w-2 rounded-full bg-gray-400"></span>
                         {task.priority || "Normal"}
                     </span>
-                </div>
+                    {task.taskStatus === "Done" && task.completedAt && (
+                        <span className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-500/20 shadow-sm">
+                            Completed on: {new Date(task.completedAt).toLocaleDateString()}
+                        </span>
+                    )}
             </div>
+            {task.updatedBy && (
+                <div className="text-xs text-gray-400 italic">
+                    Last updated by: {task.updatedBy.fullName || "Unknown"}
+                </div>
+            )}
         </div>
     );
 };

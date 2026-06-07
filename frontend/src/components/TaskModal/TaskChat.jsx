@@ -21,6 +21,15 @@ export const TaskChat = ({ task, project, socket, user }) => {
 
     const messagesEndRef = useRef(null);
 
+    useEffect(() => {
+        return () => {
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            if (socket && project?._id) {
+                socket.emit("stop-typing", { projectId: project._id, taskId: task._id, userName: user?.fullName });
+            }
+        };
+    }, []);
+
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };

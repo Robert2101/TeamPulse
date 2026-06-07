@@ -18,6 +18,8 @@ export const CreateProjectModal = ({ api }) => {
         priority: "Medium",
         budget: "",
         projectType: "Software",
+        startDate: "",
+        endDate: "",
     });
 
     const handleSubmit = async (e) => {
@@ -29,7 +31,7 @@ export const CreateProjectModal = ({ api }) => {
             addProject(res.data.project);
 
             setIsOpen(false); 
-            setFormData({ projectName: "", projectDescription: "", priority: "Medium", budget: "", projectType: "Software" });
+            setFormData({ projectName: "", projectDescription: "", priority: "Medium", budget: "", projectType: "Software", startDate: "", endDate: "" });
         } catch (error) {
             console.error("Failed to create project:", error);
         } finally {
@@ -103,7 +105,31 @@ export const CreateProjectModal = ({ api }) => {
                                 <option value="Low">Low</option>
                                 <option value="Medium">Medium</option>
                                 <option value="High">High</option>
+                                <option value="Critical">Critical</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="startDate" className="text-gray-500">Start Date</Label>
+                            <Input
+                                id="startDate"
+                                type="date"
+                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
+                                value={formData.startDate}
+                                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="endDate" className="text-gray-500">End Date</Label>
+                            <Input
+                                id="endDate"
+                                type="date"
+                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
+                                value={formData.endDate}
+                                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                            />
                         </div>
                     </div>
 

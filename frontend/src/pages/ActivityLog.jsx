@@ -4,7 +4,8 @@ import api from "../lib/axios";
 import { useStore } from "../store/useStore";
 
 export const ActivityLog = () => {
-    const { projects } = useStore();
+    const { projects, user } = useStore();
+    const isAdmin = user?.role?.roleName === 'Admin';
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedProject, setSelectedProject] = useState(projects[0]?._id || "");
@@ -187,12 +188,14 @@ export const ActivityLog = () => {
                                             </div>
 
                                             {/* Sub-meta details on hover for ultra pros */}
-                                            <div className="mt-1 h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:h-auto group-hover:opacity-100">
-                                                <div className="text-[10px] text-gray-500 flex items-center gap-3">
-                                                    <span>Entity ID: {log.entityId}</span>
-                                                    <span>User ID: {log.user?._id}</span>
+                                            {isAdmin && (
+                                                <div className="mt-1 h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:h-auto group-hover:opacity-100">
+                                                    <div className="text-[10px] text-gray-500 flex items-center gap-3">
+                                                        <span>Entity ID: {log.entityId}</span>
+                                                        <span>User ID: {log.user?._id}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
                                     </div>
                                 );

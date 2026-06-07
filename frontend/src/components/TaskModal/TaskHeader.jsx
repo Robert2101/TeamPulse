@@ -18,7 +18,7 @@ export const TaskHeader = ({ task, project, canAssignMembers, onClose }) => {
                 <h2 className="text-2xl font-extrabold tracking-tight text-gray-900">{task.taskName}</h2>
                 <div className="mt-3 flex flex-wrap items-center gap-6 text-xs text-gray-500">
                     <span className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 font-medium border border-gray-200">
-                        <Clock size={14} className="text-gray-700" /> Due: <span className="text-gray-800">{new Date(task.dueDate).toLocaleDateString()}</span>
+                        <Clock size={14} className="text-gray-700" /> Due: <span className="text-gray-800">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</span>
                     </span>
 
                     <span className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 font-medium border border-gray-200">
