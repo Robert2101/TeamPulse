@@ -5,7 +5,8 @@ const taskSchema = new mongoose.Schema({
     workspace: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Workspace",
-        required: false
+        required: false,
+        index: true
     },
 
     taskName: {
