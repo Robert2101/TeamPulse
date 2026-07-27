@@ -17,6 +17,16 @@ import { Reports } from "./pages/Reports";
 import { MyTasks } from "./pages/MyTasks";
 import { Settings } from "./pages/Settings";
 
+const ProtectedLayout = () => {
+  const { user } = useStore();
+  if (!user) return <Navigate to="/" />;
+  return (
+    <DashboardLayout>
+      <Outlet />
+    </DashboardLayout>
+  );
+};
+
 export default function App() {
   const { user, isAuthChecking, checkAuth } = useStore();
 
@@ -33,15 +43,6 @@ export default function App() {
       </div>
     );
   }
-
-  const ProtectedLayout = () => {
-    if (!user) return <Navigate to="/" />;
-    return (
-      <DashboardLayout>
-        <Outlet />
-      </DashboardLayout>
-    );
-  };
 
   return (
     <BrowserRouter>

@@ -12,13 +12,14 @@ export const useStore = create((set) => ({
     user: null,
     isAuthChecking: true,
     projects: [],
+    projectsLoaded: false,
 
     checkAuth: async () => {
         try {
             const res = await axios.get('/auth/check-auth');
             set({ user: res.data.user, isAuthChecking: false });
         } catch (error) {
-            set({ user: null, isAuthChecking: false });
+            set({ user: null, isAuthChecking: false, projects: [], projectsLoaded: false });
         }
     },
 
@@ -29,10 +30,10 @@ export const useStore = create((set) => ({
 
     logout: async () => {
         await axios.post('/auth/logout');
-        set({ user: null });
+        set({ user: null, projects: [], projectsLoaded: false });
     },
 
-    setProjects: (projects) => set({ projects }),
+    setProjects: (projects) => set({ projects, projectsLoaded: true }),
     addProject: (project) => set((state) => ({ projects: [project, ...state.projects] })),
     removeProject: (projectId) => set((state) => ({ projects: state.projects.filter(p => p._id !== projectId) })),
     updateProjectInStore: (updatedProject) => set((state) => ({ projects: state.projects.map(p => p._id === updatedProject._id ? updatedProject : p) })),

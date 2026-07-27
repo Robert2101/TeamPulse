@@ -5,12 +5,12 @@ import { useStore } from "../store/useStore";
 import api from "../lib/axios";
 
 export const DashboardLayout = ({ children }) => {
-    const { projects, setProjects } = useStore();
+    const { projects, setProjects, projectsLoaded } = useStore();
 
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     useEffect(() => {
-        if (projects.length > 0) return;
+        if (projectsLoaded) return;
         const fetchProjects = async () => {
             try {
                 const response = await api.get("/projects");
@@ -20,7 +20,7 @@ export const DashboardLayout = ({ children }) => {
             }
         };
         fetchProjects();
-    }, [projects.length, setProjects]);
+    }, [projectsLoaded, setProjects]);
 
     const location = useLocation();
     // Extract the current path to make a sleek breadcrumb
