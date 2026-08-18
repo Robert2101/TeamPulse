@@ -18,8 +18,31 @@ export const uploadFile = async (req, res) => {
         if (!["Task", "Comment", "User", "Project"].includes(entityType)) return res.status(400).json({ message: "Invalid entityType." });
 
         let finalEntityId = entityId;
+
         if (entityType === 'User') {
-            finalEntityId = req.dbUser._id.toString(); // IDOR FIX: Users can only upload their own pic
+            finalEntityId = req.dbUser._id.toString(); // IDOR FIX: Users can only upload their own profile pic
+        } else if (entityType === 'Project') {
+            const project = await Project.findOne({ _id: entityId, workspace: req.dbUser.workspace });
+            if (!project) {
+                return res.status(404).json({ message: "Target project not found in your workspace." });
+            }
+            const isAdmin = req.dbUser.role?.roleName === 'Admin';
+            const pmId = project.projectManager ? project.projectManager.toString() : null;
+            const isManager = pmId === req.dbUser._id.toString();
+            const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
+            if (!isAdmin && !isManager && !isMember) {
+                return res.status(403).json({ message: "Access Denied. You cannot upload files to this project." });
+            }
+        } else if (entityType === 'Task') {
+            const task = await Task.findOne({ _id: entityId, workspace: req.dbUser.workspace });
+            if (!task) {
+                return res.status(404).json({ message: "Target task not found in your workspace." });
+            }
+        } else if (entityType === 'Comment') {
+            const comment = await Comment.findOne({ _id: entityId, workspace: req.dbUser.workspace });
+            if (!comment) {
+                return res.status(404).json({ message: "Target comment not found in your workspace." });
+            }
         }
 
         const uploadResult = await new Promise((resolve, reject) => {

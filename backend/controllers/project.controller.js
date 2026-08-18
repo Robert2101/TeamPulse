@@ -235,47 +235,39 @@ export const deleteProject = async (req, res) => {
 export const getProjectById = async (req, res) => {
     try {
         const { id } = req.params;
-        const cacheKey = `project:${id}`;
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
 
-        const cached = await getCache(cacheKey);
-        if (cached) {
-            const isAdmin = req.dbUser.role.roleName === 'Admin';
-            const pmId = cached.projectManager ? (cached.projectManager._id ? cached.projectManager._id.toString() : cached.projectManager.toString()) : null;
-            const isManager = pmId === req.dbUser._id.toString();
-            const isMember = Array.isArray(cached.assignedTeamMembers) && cached.assignedTeamMembers.some(member => {
-                const memberId = typeof member === 'object' ? member._id.toString() : member.toString();
-                return memberId === req.dbUser._id.toString();
-            });
-
-            if (!isAdmin && !isManager && !isMember) {
-                return res.status(403).json({ message: "Access Denied. You do not have permission to view this project." });
-            }
-
-            const copy = JSON.parse(JSON.stringify(cached));
-            if (!isAdmin && !isManager) {
-                delete copy.budget;
-            }
-            return res.status(200).json(copy);
-        }
-
+        // 1. MUST perform Workspace-scoped Project lookup FIRST to guarantee tenant boundary
         const project = await Project.findOne({ _id: id, workspace: req.dbUser.workspace })
             .populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress profilePicture')
             .lean();
 
         if (!project) {
-            return res.status(404).json({ message: "Project not found." });
+            return res.status(404).json({ message: "Project not found in your workspace." });
         }
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const pmId = project.projectManager ? project.projectManager._id.toString() : null;
+        const pmId = project.projectManager ? (project.projectManager._id ? project.projectManager._id.toString() : project.projectManager.toString()) : null;
         const isManager = pmId === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(member =>
-            member._id.toString() === req.dbUser._id.toString()
-        );
+        const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(member => {
+            const memberId = typeof member === 'object' ? member._id.toString() : member.toString();
+            return memberId === req.dbUser._id.toString();
+        });
 
         if (!isAdmin && !isManager && !isMember) {
             return res.status(403).json({ message: "Access Denied. You do not have permission to view this project." });
+        }
+
+        // 2. Authorization passed: Check Redis cache
+        const cacheKey = `project:${workspaceId}:${id}`;
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            const copy = JSON.parse(JSON.stringify(cached));
+            if (!isAdmin && !isManager) {
+                delete copy.budget;
+            }
+            return res.status(200).json(copy);
         }
 
         await setCache(cacheKey, project, 90); // 90s TTL
