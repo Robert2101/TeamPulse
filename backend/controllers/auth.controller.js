@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import logger from '../utils/logger.js';
 import mongoose from 'mongoose';
+import { delCache } from '../config/redis.js';
 
 export const signup = async (req, res) => {
     try {
@@ -103,7 +104,10 @@ export const login = async (req, res) => {
     }
 };
 
-export const logout = (req, res) => {
+export const logout = async (req, res) => {
+    if (req.dbUser?._id) {
+        await delCache(`session:user:${req.dbUser._id}`);
+    }
     res.clearCookie('token', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -168,6 +172,9 @@ export const updateUserRole = async (req, res) => {
         targetUser.role = requestedRole._id;
         await targetUser.save();
 
+        // Invalidate session cache for the updated user
+        await delCache(`session:user:${userId}`);
+
         res.status(200).json({ message: "User role updated successfully" });
     } catch (error) {
         logger.error(`Update Role Error: ${error.message}`);
@@ -200,6 +207,9 @@ export const updateUserStatus = async (req, res) => {
         targetUser.status = status;
         await targetUser.save();
 
+        // Invalidate session cache for the updated user
+        await delCache(`session:user:${userId}`);
+
         res.status(200).json({ message: `User status updated to ${status}` });
     } catch (error) {
         logger.error(`Update Status Error: ${error.message}`);
@@ -223,6 +233,10 @@ export const updateProfile = async (req, res) => {
         }
 
         await user.save();
+        
+        // Invalidate session cache for the user
+        await delCache(`session:user:${user._id}`);
+
         const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
         res.status(200).json({ message: "Profile updated successfully", user: populatedUser });
     } catch (error) {

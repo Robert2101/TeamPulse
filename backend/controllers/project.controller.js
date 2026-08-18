@@ -3,7 +3,8 @@ import User from '../models/user.model.js';
 import logger from '../utils/logger.js';
 import Task from '../models/task.model.js';
 import Comment from '../models/comment.model.js';
-import { logActivity } from '../utils/activityLogger.js'; 
+import { logActivity } from '../utils/activityLogger.js';
+import { getCache, setCache, delCache, delWorkspaceCacheKeys } from '../config/redis.js';
 
 export const createProject = async (req, res) => {
     try {
@@ -45,6 +46,10 @@ export const createProject = async (req, res) => {
         });
 
         const savedProject = await newProject.save();
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+
+        // Write Mongo FIRST -> delete Redis cache keys SECOND
+        await delWorkspaceCacheKeys(workspaceId);
 
         await logActivity(req.dbUser._id, req.dbUser.workspace, 'Created Project', 'Project', savedProject._id, { projectName });
 
@@ -60,8 +65,16 @@ export const createProject = async (req, res) => {
 export const getAllProjects = async (req, res) => {
     try {
         const isAdmin = req.dbUser.role.roleName === 'Admin';
-        let query = {};
+        const bucket = isAdmin ? 'admin' : req.dbUser._id.toString();
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+        const cacheKey = `projects:list:${workspaceId}:${bucket}`;
 
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.status(200).json(cached);
+        }
+
+        let query = {};
         if (!isAdmin) {
             query = {
                 $or: [
@@ -76,7 +89,7 @@ export const getAllProjects = async (req, res) => {
             .populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress')
             .sort({ createdAt: -1 })
-            .lean(); // Use lean to modify data
+            .lean();
 
         // RBAC: Hide budget from regular team members/stakeholders
         const sanitizedProjects = projects.map(p => {
@@ -85,6 +98,8 @@ export const getAllProjects = async (req, res) => {
             }
             return p;
         });
+
+        await setCache(cacheKey, sanitizedProjects, 60, workspaceId);
 
         logger.info(`Projects fetched by User ID: ${req.dbUser._id} (Admin: ${isAdmin})`);
         res.status(200).json(sanitizedProjects);
@@ -139,6 +154,12 @@ export const updateProject = async (req, res) => {
         ).populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress profilePicture');
 
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+
+        // Write Mongo FIRST -> delete Redis cache keys SECOND
+        await delCache(`project:${id}`);
+        await delWorkspaceCacheKeys(workspaceId);
+
         await logActivity(req.dbUser._id, req.dbUser.workspace, 'Updated Project', 'Project', updatedProject._id, { projectName: updatedProject.projectName });
 
         logger.info(`Project updated: '${updatedProject.projectName}' (ID: ${id}) by User ID: ${req.dbUser._id}`);
@@ -178,6 +199,13 @@ export const deleteProject = async (req, res) => {
             await Comment.deleteMany({ task: { $in: taskIds } });
         }
 
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+
+        // Write Mongo FIRST -> delete Redis cache keys SECOND
+        await delCache(`project:${id}`);
+        await delCache(`tasks:project:${id}`);
+        await delWorkspaceCacheKeys(workspaceId);
+
         await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Project', 'Project', id, { projectName: project.projectName });
 
         logger.info(`Cascade Delete Executed: Project '${project.projectName}' (ID: ${id}), ${taskIds.length} tasks, and related comments deleted by User ID: ${req.dbUser._id}`);
@@ -192,18 +220,39 @@ export const deleteProject = async (req, res) => {
 export const getProjectById = async (req, res) => {
     try {
         const { id } = req.params;
+        const cacheKey = `project:${id}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            const isAdmin = req.dbUser.role.roleName === 'Admin';
+            const pmId = cached.projectManager ? (cached.projectManager._id ? cached.projectManager._id.toString() : cached.projectManager.toString()) : null;
+            const isManager = pmId === req.dbUser._id.toString();
+            const isMember = Array.isArray(cached.assignedTeamMembers) && cached.assignedTeamMembers.some(member => {
+                const memberId = typeof member === 'object' ? member._id.toString() : member.toString();
+                return memberId === req.dbUser._id.toString();
+            });
+
+            if (!isAdmin && !isManager && !isMember) {
+                return res.status(403).json({ message: "Access Denied. You do not have permission to view this project." });
+            }
+
+            const copy = JSON.parse(JSON.stringify(cached));
+            if (!isAdmin && !isManager) {
+                delete copy.budget;
+            }
+            return res.status(200).json(copy);
+        }
 
         const project = await Project.findOne({ _id: id, workspace: req.dbUser.workspace })
             .populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress profilePicture')
-            .lean(); // Use lean
+            .lean();
 
         if (!project) {
             return res.status(404).json({ message: "Project not found." });
         }
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
-        // Handle case where projectManager might be null/undefined or populated
         const pmId = project.projectManager ? project.projectManager._id.toString() : null;
         const isManager = pmId === req.dbUser._id.toString();
         const isMember = project.assignedTeamMembers.some(member =>
@@ -214,7 +263,8 @@ export const getProjectById = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You do not have permission to view this project." });
         }
 
-        // RBAC: Hide budget from regular team members/stakeholders
+        await setCache(cacheKey, project, 90); // 90s TTL
+
         if (!isAdmin && !isManager) {
             delete project.budget;
         }

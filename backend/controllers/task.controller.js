@@ -4,6 +4,7 @@ import Comment from '../models/comment.model.js';
 import logger from '../utils/logger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
+import { getCache, setCache, delCache } from '../config/redis.js';
 
 export const createTask = async (req, res) => {
     try {
@@ -40,12 +41,16 @@ export const createTask = async (req, res) => {
         });
 
         const savedTask = await newTask.save();
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+
+        // Write Mongo FIRST -> invalidate Redis cache keys SECOND
+        await delCache(`tasks:project:${projectReference}`);
+        await delCache(`dash:stats:${workspaceId}`);
 
         await logActivity(req.dbUser._id, req.dbUser.workspace, 'Created Task', 'Task', savedTask._id, { taskName, project: projectReference });
 
         logger.info(`Task created: '${taskName}' in Project '${projectReference}' by User ID: ${req.dbUser._id}`);
 
-        //  FIX: Populate it before sending it back and broadcasting it
         const populatedTask = await Task.findById(savedTask._id).populate('assignee', 'fullName emailAddress');
 
         if (!populatedTask) {
@@ -53,10 +58,7 @@ export const createTask = async (req, res) => {
             return res.status(201).json({ message: "Task created successfully", task: savedTask });
         }
 
-        // FIX: Emit 'task-created' (your frontend ProjectBoard listens for this, not 'task-updated')
         getIO().to(populatedTask.projectReference.toString()).emit('task-created', populatedTask);
-
-        // FIX: Return populatedTask in the response so the creator sees the assignee instantly
         res.status(201).json({ message: "Task created successfully", task: populatedTask });
 
     } catch (error) {
@@ -68,6 +70,12 @@ export const createTask = async (req, res) => {
 export const getTasksByProject = async (req, res) => {
     try {
         const { projectId } = req.params;
+        const cacheKey = `tasks:project:${projectId}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.status(200).json(cached);
+        }
 
         const project = await Project.findById(projectId);
         if (!project) {
@@ -87,13 +95,49 @@ export const getTasksByProject = async (req, res) => {
             .populate('assignee', 'fullName emailAddress profilePicture')
             .populate('createdBy', 'fullName')
             .populate('updatedBy', 'fullName')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
+
+        await setCache(cacheKey, tasks, 30); // 30s TTL
 
         res.status(200).json(tasks);
 
     } catch (error) {
         logger.error(`Error fetching tasks for project ${req.params.projectId}: ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: "Internal server error while fetching tasks." });
+    }
+};
+
+export const getDashboardStats = async (req, res) => {
+    try {
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+        const cacheKey = `dash:stats:${workspaceId}`;
+
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.status(200).json(cached);
+        }
+
+        // Single query over workspace tasks (collapses N+1 queries)
+        const allTasks = await Task.find({ workspace: req.dbUser.workspace })
+            .select('taskStatus priority')
+            .lean();
+
+        const stats = {
+            todo: allTasks.filter(t => t.taskStatus === 'To-Do').length,
+            inProgress: allTasks.filter(t => t.taskStatus === 'In-Progress').length,
+            review: allTasks.filter(t => t.taskStatus === 'Review').length,
+            done: allTasks.filter(t => t.taskStatus === 'Done').length,
+            urgent: allTasks.filter(t => t.priority === 'Urgent' && t.taskStatus !== 'Done').length,
+            total: allTasks.length
+        };
+
+        await setCache(cacheKey, stats, 45); // 45s TTL
+
+        res.status(200).json(stats);
+    } catch (error) {
+        logger.error(`Error fetching dashboard stats: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ message: "Internal server error while fetching dashboard stats." });
     }
 };
 
@@ -133,9 +177,7 @@ export const updateTask = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You cannot update tasks in a project you do not belong to." });
         }
 
-        // RBAC FIx: Strict rule for Team Members (can only update status)
         if (!isAdmin && !isManager) {
-            // Remove protected fields from the update payload
             delete updateData.taskName;
             delete updateData.taskDescription;
             delete updateData.assignee;
@@ -160,9 +202,16 @@ export const updateTask = async (req, res) => {
             .populate('assignee', 'fullName emailAddress')
             .populate('updatedBy', 'fullName');
 
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+
+        // Write Mongo FIRST -> delete Redis cache SECOND
+        await delCache(`tasks:project:${task.projectReference}`);
+        await delCache(`dash:stats:${workspaceId}`);
+
         await logActivity(req.dbUser._id, req.dbUser.workspace, `Updated Task to ${populatedTask.taskStatus}`, 'Task', populatedTask._id, {
             taskName: populatedTask.taskName,
-            newStatus: populatedTask.taskStatus
+            newStatus: populatedTask.taskStatus,
+            projectId: task.projectReference.toString()
         });
 
         logger.info(`Task updated: '${populatedTask.taskName}' (ID: ${id}) by User ID: ${req.dbUser._id}`);
@@ -198,10 +247,15 @@ export const deleteTask = async (req, res) => {
         }
 
         await Task.findByIdAndDelete(id);
-
         await Comment.deleteMany({ task: id });
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Task', 'Task', id, { taskName: task.taskName });
+        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+
+        // Write Mongo FIRST -> delete Redis cache SECOND
+        await delCache(`tasks:project:${task.projectReference}`);
+        await delCache(`dash:stats:${workspaceId}`);
+
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Task', 'Task', id, { taskName: task.taskName, projectId: task.projectReference.toString() });
 
         getIO().to(task.projectReference.toString()).emit('task-deleted', { taskId: id });
 

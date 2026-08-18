@@ -40,21 +40,9 @@ export const Reports = () => {
                         setLoading(false);
                         return;
                     }
-                    // ADMIN COMMAND CENTER LOGIC
-                    const taskPromises = projects.map((p) =>
-                        api.get(`/tasks/project/${p._id}`)
-                    );
-                    const results = await Promise.all(taskPromises);
-                    const allTasks = results.flatMap((r) => r.data);
-
-                    setGlobalStats({
-                        todo: allTasks.filter((t) => t.taskStatus === "To-Do").length,
-                        inProgress: allTasks.filter((t) => t.taskStatus === "In-Progress").length,
-                        review: allTasks.filter((t) => t.taskStatus === "Review").length,
-                        done: allTasks.filter((t) => t.taskStatus === "Done").length,
-                        urgent: allTasks.filter((t) => t.priority === "Urgent" && t.taskStatus !== "Done").length,
-                        total: allTasks.length,
-                    });
+                    // ADMIN COMMAND CENTER LOGIC: Use single workspace aggregate stats endpoint (cached in Redis)
+                    const res = await api.get('/tasks/stats');
+                    setGlobalStats(res.data);
                 } else {
                     // PERSONAL WORKSPACE LOGIC
                     const res = await api.get('/tasks/mine');

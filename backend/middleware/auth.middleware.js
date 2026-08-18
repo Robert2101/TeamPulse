@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
 import logger from '../utils/logger.js';
+import { getCache, setCache } from '../config/redis.js';
 
 export const protectRoute = async (req, res, next) => {
     try {
@@ -11,13 +12,22 @@ export const protectRoute = async (req, res, next) => {
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.userId)
-            .select('-password')
-            .populate('role')
-            .populate('workspace');
+        const cacheKey = `session:user:${decoded.userId}`;
+
+        let user = await getCache(cacheKey);
 
         if (!user) {
-            return res.status(401).json({ message: "User no longer exists." });
+            user = await User.findById(decoded.userId)
+                .select('-password')
+                .populate('role')
+                .populate('workspace')
+                .lean();
+
+            if (!user) {
+                return res.status(401).json({ message: "User no longer exists." });
+            }
+
+            await setCache(cacheKey, user, 900); // 15 min TTL (900s)
         }
 
         if (user.status === 'Inactive') {
