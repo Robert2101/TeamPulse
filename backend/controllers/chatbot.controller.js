@@ -36,8 +36,9 @@ export const getChatHistory = async (req, res) => {
 
 export const askChatbot = async (req, res) => {
     try {
+        const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
         const ai = new GoogleGenAI({
-            apiKey: process.env.GEMINI_API_KEY
+            apiKey: apiKey
         });
         const { query } = req.body;
         const userId = req.dbUser._id;

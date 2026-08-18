@@ -8,17 +8,18 @@ import { getCache, setCache } from '../config/redis.js';
 export const getActivityLogs = async (req, res) => {
     try {
         const { entityId: projectId } = req.params;
-        const cacheKey = `activity:${projectId}`;
 
-        const cached = await getCache(cacheKey);
-        if (cached) {
-            return res.status(200).json(cached);
-        }
-
-        // RBAC Check: Check if user actually belongs to this project
+        // 1. MUST perform Project lookup & Workspace/RBAC check FIRST
         const project = await Project.findById(projectId);
         if (!project) {
             return res.status(404).json({ message: "Project not found." });
+        }
+
+        const userWs = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+        const projectWs = project.workspace?._id?.toString() || project.workspace?.toString();
+        if (userWs !== projectWs) {
+            logger.warn(`Cross-tenant security alert: User ${req.dbUser.emailAddress} attempted to read logs of Project ${projectId} from another workspace.`);
+            return res.status(403).json({ message: "Access Denied. Project belongs to another workspace." });
         }
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
@@ -28,6 +29,13 @@ export const getActivityLogs = async (req, res) => {
         if (!isAdmin && !isManager && !isMember) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to read logs of an unauthorized project.`);
             return res.status(403).json({ message: "Access Denied." });
+        }
+
+        // 2. Authorization passed: NOW check Upstash Redis cache
+        const cacheKey = `activity:${projectId}`;
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.status(200).json(cached);
         }
 
         const tasks = await Task.find({ projectReference: projectId, workspace: req.dbUser.workspace }).select('_id').lean();

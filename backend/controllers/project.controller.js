@@ -30,6 +30,17 @@ export const createProject = async (req, res) => {
             });
         }
 
+        if (assignedTeamMembers && Array.isArray(assignedTeamMembers) && assignedTeamMembers.length > 0) {
+            const userWs = req.dbUser.workspace?._id || req.dbUser.workspace;
+            const validUsers = await User.find({
+                _id: { $in: assignedTeamMembers },
+                workspace: userWs
+            }).select('_id');
+            if (validUsers.length !== assignedTeamMembers.length) {
+                return res.status(400).json({ message: "One or more assigned team members do not belong to your workspace." });
+            }
+        }
+
         const newProject = new Project({
             projectName,
             projectDescription,
@@ -130,18 +141,22 @@ export const updateProject = async (req, res) => {
 
         // Resolve emails to ObjectIds safely if frontend passes an array containing emails or user objects
         if (updateData.assignedTeamMembers && Array.isArray(updateData.assignedTeamMembers)) {
+            const userWs = req.dbUser.workspace?._id || req.dbUser.workspace;
             const resolvedMembers = [];
             for (const member of updateData.assignedTeamMembers) {
                 if (typeof member === 'string' && member.includes('@')) {
-                    const userByEmail = await User.findOne({ emailAddress: member.toLowerCase() });
+                    const userByEmail = await User.findOne({ emailAddress: member.toLowerCase(), workspace: userWs });
                     if (!userByEmail) {
-                        return res.status(400).json({ message: `User with email ${member} not found. Ensure they are registered.` });
+                        return res.status(400).json({ message: `User with email ${member} not found in your workspace.` });
                     }
                     resolvedMembers.push(userByEmail._id);
-                } else if (typeof member === 'object' && member._id) {
-                    resolvedMembers.push(member._id);
                 } else {
-                    resolvedMembers.push(member);
+                    const memberId = typeof member === 'object' && member._id ? member._id : member;
+                    const validUser = await User.findOne({ _id: memberId, workspace: userWs });
+                    if (!validUser) {
+                        return res.status(400).json({ message: `User ID ${memberId} does not belong to your workspace.` });
+                    }
+                    resolvedMembers.push(validUser._id);
                 }
             }
             updateData.assignedTeamMembers = resolvedMembers;

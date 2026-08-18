@@ -37,6 +37,7 @@ export const uploadFile = async (req, res) => {
             size: req.file.size,
             cloudinaryId: uploadResult.public_id,
             cloudinaryResourceType: uploadResult.resource_type || 'raw',
+            workspace: req.dbUser.workspace,
             uploadedBy: req.dbUser._id,
             entityType,
             entityId: finalEntityId,
@@ -102,7 +103,7 @@ export const getFilesByEntity = async (req, res) => {
             }
         }
 
-        const files = await FileAsset.find({ entityType, entityId })
+        const files = await FileAsset.find({ entityType, entityId, workspace: req.dbUser.workspace })
             .populate('uploadedBy', 'fullName profilePicture')
             .sort({ createdAt: -1 });
         res.status(200).json(files);
@@ -119,6 +120,13 @@ export const deleteFile = async (req, res) => {
         const file = await FileAsset.findById(fileId);
 
         if (!file) return res.status(404).json({ message: "File not found." });
+
+        const userWs = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
+        const fileWs = file.workspace?._id?.toString() || file.workspace?.toString();
+
+        if (userWs !== fileWs) {
+            return res.status(403).json({ message: "Access Denied. File belongs to another workspace." });
+        }
 
         if (file.uploadedBy.toString() !== req.dbUser._id.toString() && req.dbUser.role.roleName !== 'Admin') {
             return res.status(403).json({ message: "You are not authorised to delete this file." });

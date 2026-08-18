@@ -64,10 +64,20 @@ export const initSocket = (server) => {
                 const project = await Project.findById(projectId);
                 if (!project) return;
 
+                // Multi-Tenant Isolation Check: Ensure project belongs to user's workspace
+                const userWs = socket.dbUser.workspace?._id?.toString() || socket.dbUser.workspace?.toString();
+                const projectWs = project.workspace?._id?.toString() || project.workspace?.toString();
+
+                if (userWs !== projectWs) {
+                    logger.warn(`🚨 Cross-Tenant Intrusion Attempt: ${socket.dbUser.fullName} from workspace ${userWs} tried to join Project Room ${projectId} in workspace ${projectWs}`);
+                    return socket.emit("error", { message: "You are not authorized to join project rooms outside your workspace." });
+                }
+
                 // Role-Based Security for WebSocket Rooms
                 const isAdmin = socket.dbUser.role?.roleName === 'Admin';
-                const isManager = project.projectManager.toString() === socket.dbUser._id.toString();
-                const isMember = project.assignedTeamMembers.some(id => id.toString() === socket.dbUser._id.toString());
+                const pmId = project.projectManager ? project.projectManager.toString() : null;
+                const isManager = pmId === socket.dbUser._id.toString();
+                const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(id => id.toString() === socket.dbUser._id.toString());
 
                 if (isAdmin || isManager || isMember) {
                     socket.join(projectId);

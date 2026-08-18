@@ -35,6 +35,13 @@ const fileAssetSchema = new mongoose.Schema({
         default: 'raw'
     },
 
+    workspace: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Workspace",
+        required: true,
+        index: true
+    },
+
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
