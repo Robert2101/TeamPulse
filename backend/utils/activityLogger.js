@@ -20,6 +20,10 @@ export const logActivity = async (userId, workspaceId, action, entityType, entit
         if (projectId) {
             await delCache(`activity:${projectId}`);
             await delCache(`tasks:project:${projectId}`);
+            // Also invalidate workspace-scoped project detail cache
+            if (wsId) {
+                await delCache(`project:${wsId}:${projectId}`);
+            }
         }
 
         if (wsId) {

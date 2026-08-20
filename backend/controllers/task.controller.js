@@ -14,9 +14,9 @@ export const createTask = async (req, res) => {
             return res.status(400).json({ message: "Task name and Project Reference are required." });
         }
 
-        const project = await Project.findById(projectReference);
+        const project = await Project.findOne({ _id: projectReference, workspace: req.dbUser.workspace });
         if (!project) {
-            return res.status(404).json({ message: "Project not found." });
+            return res.status(404).json({ message: "Project not found in your workspace." });
         }
 
         const isAdmin = req.dbUser.role.roleName === 'Admin';
@@ -187,6 +187,13 @@ export const updateTask = async (req, res) => {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to update Task ${id} in an unauthorized project.`);
             return res.status(403).json({ message: "Access Denied. You cannot update tasks in a project you do not belong to." });
         }
+
+        // S-04 FIX: Strip protected fields to prevent mass assignment attacks
+        delete updateData._id;
+        delete updateData.__v;
+        delete updateData.workspace;
+        delete updateData.createdBy;
+        delete updateData.createdAt;
 
         if (!isAdmin && !isManager) {
             delete updateData.taskName;

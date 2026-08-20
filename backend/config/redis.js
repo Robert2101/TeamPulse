@@ -5,24 +5,35 @@ import logger from '../utils/logger.js';
 let redis = null;
 let ratelimiteMap = new Map();
 let isConfigured = false;
+let initialized = false;
 
-const restUrl = process.env.UPSTASH_REDIS_REST_URL;
-const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+/**
+ * Initialize the Upstash Redis client.
+ * MUST be called AFTER dotenv.config() to ensure env vars are loaded.
+ * Safe to call multiple times — only initializes once.
+ */
+export const initRedis = () => {
+    if (initialized) return;
+    initialized = true;
 
-if (restUrl && restToken) {
-    try {
-        redis = new Redis({
-            url: restUrl,
-            token: restToken,
-        });
-        isConfigured = true;
-        logger.info('🚀 Upstash Redis client initialized successfully.');
-    } catch (err) {
-        logger.warn(`⚠️ Failed to initialize Upstash Redis: ${err.message}. Falling back to fail-open mode.`);
+    const restUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (restUrl && restToken) {
+        try {
+            redis = new Redis({
+                url: restUrl,
+                token: restToken,
+            });
+            isConfigured = true;
+            logger.info('🚀 Upstash Redis client initialized successfully.');
+        } catch (err) {
+            logger.warn(`⚠️ Failed to initialize Upstash Redis: ${err.message}. Falling back to fail-open mode.`);
+        }
+    } else {
+        logger.warn('⚠️ UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not found in environment. Upstash Redis caching will fail-open (bypass cache).');
     }
-} else {
-    logger.warn('⚠️ UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not found in environment. Upstash Redis caching will fail-open (bypass cache).');
-}
+};
 
 /**
  * Retrieve a JSON-parsed cached value by key.

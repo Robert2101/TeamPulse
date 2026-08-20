@@ -13,8 +13,8 @@ export const addComment = async (req, res) => {
             return res.status(400).json({ message: "Comment content is required." });
         }
 
-        const task = await Task.findById(taskId).populate('projectReference');
-        if (!task) return res.status(404).json({ message: "Task not found." });
+        const task = await Task.findOne({ _id: taskId, workspace: req.dbUser.workspace }).populate('projectReference');
+        if (!task) return res.status(404).json({ message: "Task not found in your workspace." });
 
         const project = task.projectReference;
 
@@ -60,9 +60,9 @@ export const getCommentsByTask = async (req, res) => {
     try {
         const { taskId } = req.params;
 
-        const task = await Task.findById(taskId).populate('projectReference');
+        const task = await Task.findOne({ _id: taskId, workspace: req.dbUser.workspace }).populate('projectReference');
         if (!task) {
-            return res.status(404).json({ message: "Task not found." });
+            return res.status(404).json({ message: "Task not found in your workspace." });
         }
 
         const project = task.projectReference;

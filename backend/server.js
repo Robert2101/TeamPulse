@@ -7,6 +7,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { initSocket } from './socket/socket.js';
 import logger from './utils/logger.js';
+import { initRedis } from './config/redis.js';
 
 import authRoutes from './routes/auth.route.js'; 
 import projectRoutes from './routes/project.route.js';
@@ -17,6 +18,7 @@ import activityRoutes from './routes/activity.route.js';
 import fileRoutes from './routes/file.route.js';
 
 dotenv.config();
+initRedis(); // Initialize Redis AFTER dotenv has loaded env vars
 const app = express();
 
 app.use(cors({

@@ -139,6 +139,16 @@ export const updateProject = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can update this project." });
         }
 
+        // S-04 FIX: Strip protected fields to prevent mass assignment attacks
+        delete updateData._id;
+        delete updateData.__v;
+        delete updateData.workspace;
+        delete updateData.createdBy;
+        delete updateData.createdAt;
+        if (!isAdmin) {
+            delete updateData.projectManager; // Only admins can reassign PM
+        }
+
         // Resolve emails to ObjectIds safely if frontend passes an array containing emails or user objects
         if (updateData.assignedTeamMembers && Array.isArray(updateData.assignedTeamMembers)) {
             const userWs = req.dbUser.workspace?._id || req.dbUser.workspace;
@@ -172,7 +182,7 @@ export const updateProject = async (req, res) => {
         const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
 
         // Write Mongo FIRST -> delete Redis cache keys SECOND
-        await delCache(`project:${id}`);
+        await delCache(`project:${workspaceId}:${id}`);
         await delWorkspaceCacheKeys(workspaceId);
 
         await logActivity(req.dbUser._id, req.dbUser.workspace, 'Updated Project', 'Project', updatedProject._id, { projectName: updatedProject.projectName });
@@ -217,7 +227,7 @@ export const deleteProject = async (req, res) => {
         const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
 
         // Write Mongo FIRST -> delete Redis cache keys SECOND
-        await delCache(`project:${id}`);
+        await delCache(`project:${workspaceId}:${id}`);
         await delCache(`tasks:project:${id}`);
         await delWorkspaceCacheKeys(workspaceId);
 

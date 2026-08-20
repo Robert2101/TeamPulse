@@ -47,6 +47,11 @@ export const initSocket = (server) => {
                 return next(new Error("Authentication error: User not found in database"));
             }
 
+            // X-03 FIX: Block deactivated users from maintaining WebSocket connections
+            if (user.status === 'Inactive') {
+                return next(new Error("Authentication error: Account deactivated"));
+            }
+
             // 6. Attach the verified user to the socket object!
             socket.dbUser = user;
             next();
@@ -81,9 +86,9 @@ export const initSocket = (server) => {
 
                 if (isAdmin || isManager || isMember) {
                     socket.join(projectId);
-                    logger.info(`✅ ${socket.dbUser.fullName} securely joined Project Room: ${projectId}`);
+                    logger.info(`${socket.dbUser.fullName} securely joined Project Room: ${projectId}`);
                 } else {
-                    logger.warn(`🚨 Intrusion Attempt: ${socket.dbUser.fullName} tried to join unauthorized Project Room: ${projectId}`);
+                    logger.warn(`Intrusion Attempt: ${socket.dbUser.fullName} tried to join unauthorized Project Room: ${projectId}`);
                     socket.emit("error", { message: "You are not authorized to join this project's real-time feed." });
                 }
 
@@ -113,7 +118,7 @@ export const initSocket = (server) => {
         });
 
         socket.on("disconnect", () => {
-            logger.info(`🔴 Socket Disconnected: ${socket.dbUser.fullName} (${socket.id})`);
+            logger.info(`Socket Disconnected: ${socket.dbUser.fullName} (${socket.id})`);
         });
     });
 
