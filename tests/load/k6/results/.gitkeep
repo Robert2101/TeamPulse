@@ -1,0 +1,2 @@
+# This file ensures the results/ directory is tracked by git.
+# Generated k6 result files should NOT be committed.
