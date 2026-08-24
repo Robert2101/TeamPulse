@@ -142,3 +142,9 @@ dist
 .svelte-kit
 
 # End of https://www.toptal.com/developers/gitignore/api/node
+
+.claude/settings.local.json
+# k6 load-test local config & run artifacts
+tests/load/k6/config/env.sh
+tests/load/k6/results/*
+!tests/load/k6/results/.gitkeep
