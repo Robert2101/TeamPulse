@@ -36,6 +36,29 @@ export const initRedis = () => {
 };
 
 /**
+ * Heartbeat so the free-tier Upstash database never goes idle while this server is running.
+ * Complements the scheduled GitHub Action (.github/workflows/redis-keepalive.yml), which covers
+ * the times the host itself is asleep. Writes one small key with a TTL; failures are only logged.
+ */
+const KEEPALIVE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const KEEPALIVE_TTL_SECONDS = 14 * 24 * 60 * 60;
+
+export const startRedisKeepAlive = () => {
+    if (!isConfigured || !redis) return null;
+    const beat = async () => {
+        try {
+            await redis.set('tp:keepalive', JSON.stringify({ at: new Date().toISOString(), source: 'server' }), { ex: KEEPALIVE_TTL_SECONDS });
+        } catch (err) {
+            logger.warn(`Redis keep-alive heartbeat failed: ${err.message}`);
+        }
+    };
+    beat();
+    const timer = setInterval(beat, KEEPALIVE_INTERVAL_MS);
+    timer.unref?.(); // never keeps the process alive on its own
+    return timer;
+};
+
+/**
  * Retrieve a JSON-parsed cached value by key.
  */
 export const getCache = async (key) => {
