@@ -1,123 +1,104 @@
 import { useState } from "react";
-import { Plus, Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Plus, Loader2, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { btn, field, label } from "../lib/styles";
+import { errorMessage } from "../lib/format";
 
 export const CreateTaskModal = ({ api, project, onTaskCreated }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
     const [formData, setFormData] = useState({
         taskName: "",
         taskDescription: "",
         priority: "Medium",
         dueDate: "",
-        assignee: "", 
+        assignee: "",
         projectReference: project?._id
     });
+    const update = (key) => (e) => setFormData({ ...formData, [key]: e.target.value });
+
+    const handleOpenChange = (open) => {
+        setIsOpen(open);
+        if (!open) setError("");
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+        setError("");
         try {
-            const res = await api.post("/tasks", formData);
+            const res = await api.post("/tasks", { ...formData, taskName: formData.taskName.trim(), projectReference: project?._id });
             onTaskCreated(res.data.task);
             setIsOpen(false);
             setFormData({ ...formData, taskName: "", taskDescription: "", dueDate: "", priority: "Medium", assignee: "" });
-        } catch (error) {
-            console.error("Failed to create task:", error);
+        } catch (err) {
+            setError(errorMessage(err, "Couldn't create the task. Please try again."));
         } finally {
             setLoading(false);
         }
     };
 
+    const pm = project?.projectManager;
+    const members = (project?.assignedTeamMembers || []).filter((m) => (m._id || m) !== (pm?._id || pm));
+
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-                <button
-                   
-                   
-                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-gray-900 shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-500"
-                >
-                    <Plus size={18} />
-                    Add Task
+                <button className={btn.primary}>
+                    <Plus size={18} aria-hidden="true" />
+                    Add task
                 </button>
             </DialogTrigger>
 
-            <DialogContent className="border-gray-200 bg-gray-50/90 p-0 shadow-2xl backdrop-blur-2xl sm:max-w-125">
-                <div className="flex items-center justify-between border-b border-gray-200 p-6">
-                    <DialogTitle className="text-xl font-bold text-gray-900">New Task</DialogTitle>
+            <DialogContent className="gap-0 p-0 sm:max-w-lg">
+                <div className="border-b border-gray-200 p-6 pr-14">
+                    <DialogTitle className="text-lg font-semibold text-gray-900">New task</DialogTitle>
+                    <DialogDescription className="mt-1 text-sm text-gray-600">New tasks start in To-Do.</DialogDescription>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="taskName" className="text-gray-500">Task Name</Label>
-                        <Input
-                            id="taskName"
-                            required
-                            className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                            placeholder="e.g., Design Database Schema"
-                            value={formData.taskName}
-                            onChange={(e) => setFormData({ ...formData, taskName: e.target.value })}
-                        />
+                <form onSubmit={handleSubmit} className="space-y-4 p-6">
+                    {error && (
+                        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                            <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
+                        </div>
+                    )}
+                    <div>
+                        <label htmlFor="taskName" className={label}>Task name</label>
+                        <input id="taskName" required maxLength={200} className={field} placeholder="e.g. Design database schema" value={formData.taskName} onChange={update("taskName")} />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="taskDescription" className="text-gray-500">Description</Label>
-                        <Textarea
-                            id="taskDescription"
-                            className="min-h-25 border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                            placeholder="Task details..."
-                            value={formData.taskDescription}
-                            onChange={(e) => setFormData({ ...formData, taskDescription: e.target.value })}
-                        />
+                    <div>
+                        <label htmlFor="taskDescription" className={label}>Description <span className="font-normal text-gray-500">(optional)</span></label>
+                        <textarea id="taskDescription" rows={3} className={`${field} h-auto min-h-24 py-2`} placeholder="Add context, links or acceptance criteria" value={formData.taskDescription} onChange={update("taskDescription")} />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="assignee" className="text-gray-500">Assign To</Label>
-                        <select
-                            id="assignee"
-                            className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            value={formData.assignee}
-                            onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
-                        >
+                    <div>
+                        <label htmlFor="assignee" className={label}>Assign to</label>
+                        <select id="assignee" className={field} value={formData.assignee} onChange={update("assignee")}>
                             <option value="">Unassigned</option>
-
-                            {project?.assignedTeamMembers?.map((member) => (
+                            {members.map((member) => (
                                 <option key={member._id || member} value={member._id || member}>
-                                    {member.fullName || member.emailAddress || "Team Member"}
+                                    {member.fullName || member.emailAddress || "Team member"}
                                 </option>
                             ))}
-
-                            {project?.projectManager && (
-                                <option value={project.projectManager._id || project.projectManager}>
-                                    {project.projectManager.fullName ? `${project.projectManager.fullName} (Manager)` : "Project Manager"}
+                            {pm && (
+                                <option value={pm._id || pm}>
+                                    {pm.fullName ? `${pm.fullName} (Manager)` : "Project manager"}
                                 </option>
                             )}
                         </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="dueDate" className="text-gray-500">Due Date</Label>
-                            <Input
-                                id="dueDate"
-                                type="date"
-                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500 scheme-dark"
-                                value={formData.dueDate}
-                                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                            />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="dueDate" className={label}>Due date</label>
+                            <input id="dueDate" type="date" className={field} value={formData.dueDate} onChange={update("dueDate")} />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="priority" className="text-gray-500">Priority</Label>
-                            <select
-                                id="priority"
-                                className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                value={formData.priority}
-                                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                            >
+                        <div>
+                            <label htmlFor="priority" className={label}>Priority</label>
+                            <select id="priority" className={field} value={formData.priority} onChange={update("priority")}>
                                 <option value="Low">Low</option>
                                 <option value="Medium">Medium</option>
                                 <option value="High">High</option>
@@ -126,10 +107,10 @@ export const CreateTaskModal = ({ api, project, onTaskCreated }) => {
                         </div>
                     </div>
 
-                    <div className="mt-6 flex justify-end gap-3 border-t border-gray-200 pt-6">
-                        <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900">Cancel</button>
-                        <button type="submit" disabled={loading} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-indigo-500 disabled:opacity-50">
-                            {loading ? <Loader2 className="animate-spin" size={18} /> : "Create Task"}
+                    <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-5 sm:flex-row sm:justify-end">
+                        <button type="button" onClick={() => handleOpenChange(false)} className={btn.ghost}>Cancel</button>
+                        <button type="submit" disabled={loading} className={btn.primary}>
+                            {loading ? <><Loader2 className="animate-spin" size={16} aria-hidden="true" /> Creating…</> : "Create task"}
                         </button>
                     </div>
                 </form>

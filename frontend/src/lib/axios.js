@@ -13,10 +13,12 @@ const api = axios.create({
 api.interceptors.response.use(
     res => res,
     err => {
-        if (err.response?.status === 401) {
+        // Session expired: clear local state and send the user to sign in once (no loop on public pages).
+        const onPublicPage = ['/', '/login', '/register'].includes(window.location.pathname);
+        if (err.response?.status === 401 && !onPublicPage) {
             import('../store/useStore').then(({ useStore }) => {
-                useStore.getState().logout();
-                window.location.href = '/login';
+                useStore.setState({ user: null, projects: [], projectsLoaded: false });
+                window.location.href = '/login?expired=1';
             });
         }
         return Promise.reject(err);
