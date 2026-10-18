@@ -1,15 +1,22 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2, Eye, EyeOff, Building, KeyRound } from "lucide-react";
+import { Loader2, Eye, EyeOff, Building, KeyRound, AlertCircle } from "lucide-react";
 import api from "../../lib/axios";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthShell } from "./AuthShell";
+import { btn, field, label } from "../../lib/styles";
+import { errorMessage } from "../../lib/format";
+import { cn } from "../../lib/utils";
+
+const MODES = [
+    { id: "join", label: "Join a workspace", icon: KeyRound },
+    { id: "create", label: "Create a workspace", icon: Building },
+];
 
 export const Register = () => {
     const [mode, setMode] = useState("join");
-    const [formData, setFormData] = useState({ 
-        fullName: "", 
-        emailAddress: "", 
+    const [formData, setFormData] = useState({
+        fullName: "",
+        emailAddress: "",
         password: "",
         workspaceName: "",
         inviteCode: ""
@@ -19,148 +26,146 @@ export const Register = () => {
     const [error, setError] = useState("");
     const navigate = useNavigate();
 
+    const update = (key) => (e) => setFormData({ ...formData, [key]: e.target.value });
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError("");
-        
+
         try {
             await api.post('/auth/signup', {
                 ...formData,
+                fullName: formData.fullName.trim(),
+                emailAddress: formData.emailAddress.trim(),
+                workspaceName: formData.workspaceName.trim(),
+                inviteCode: formData.inviteCode.trim(),
                 isCreatingWorkspace: mode === "create"
             });
-            navigate("/login");
+            navigate("/login", { state: { registered: true } });
         } catch (err) {
-            setError(err.response?.data?.message || "Failed to register");
+            setError(errorMessage(err, "Couldn't create your account. Please try again."));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4 font-sans text-gray-900">
-            <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-                <div className="mb-8 text-center flex flex-col items-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 mb-4 border border-indigo-100">
-                        <Building size={24} />
-                    </div>
-                    <h2 className="text-2xl font-semibold tracking-tight text-gray-900">Setup Account</h2>
-                    <p className="mt-2 text-sm text-gray-500">Join TeamPulse and collaborate instantly</p>
-                </div>
-
-                <div className="mb-8 flex rounded-lg bg-gray-100 p-1">
+        <AuthShell
+            wide
+            title="Create your account"
+            subtitle="Join your team with an invite code, or start a new workspace as its admin."
+            footer={<>Already have an account? <Link to="/login" className="font-medium text-indigo-700 underline-offset-4 hover:underline">Sign in</Link></>}
+        >
+            <div role="tablist" aria-label="Account type" className="mb-8 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
+                {MODES.map(({ id, label: text, icon }) => {
+                    const ModeIcon = icon;
+                    return (
                     <button
+                        key={id}
                         type="button"
-                        onClick={() => { setMode("join"); setError(""); }}
-                        className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-xs font-semibold tracking-wide transition-all ${
-                            mode === "join" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                        }`}
+                        role="tab"
+                        aria-selected={mode === id}
+                        onClick={() => { setMode(id); setError(""); }}
+                        className={cn(
+                            "flex min-h-10 items-center justify-center gap-2 rounded-md px-2 text-sm font-medium transition-colors",
+                            mode === id ? "bg-white text-gray-900 shadow-[0_1px_2px_rgba(15,23,42,0.08)]" : "text-gray-600 hover:text-gray-900"
+                        )}
                     >
-                        <KeyRound size={14} /> Join Workspace
+                        <ModeIcon size={15} aria-hidden="true" className={mode === id ? "text-indigo-600" : undefined} />
+                        <span className="truncate">{text}</span>
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => { setMode("create"); setError(""); }}
-                        className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-xs font-semibold tracking-wide transition-all ${
-                            mode === "create" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                        }`}
-                    >
-                        <Building size={14} /> Create Workspace
-                    </button>
-                </div>
-
-                {error && <div className="mb-6 flex items-center justify-center rounded-lg bg-red-50 py-3 text-sm font-medium text-red-600 border border-red-100">{error}</div>}
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    {mode === "create" ? (
-                        <div className="space-y-1.5">
-                            <Label htmlFor="workspaceName" className="text-sm font-medium text-gray-700">Workspace / Company Name</Label>
-                            <Input
-                                id="workspaceName"
-                                type="text"
-                                required={mode === "create"}
-                                placeholder="E.g., Netflix Inc."
-                                className="h-11 border-gray-300 bg-white text-gray-900 focus-visible:ring-indigo-600 focus-visible:border-indigo-600"
-                                value={formData.workspaceName}
-                                onChange={(e) => setFormData({ ...formData, workspaceName: e.target.value })}
-                            />
-                        </div>
-                    ) : (
-                        <div className="space-y-1.5">
-                            <Label htmlFor="inviteCode" className="text-sm font-medium text-gray-700">Invite Code</Label>
-                            <Input
-                                id="inviteCode"
-                                type="text"
-                                required={mode === "join"}
-                                placeholder="E.g., A8X2L5"
-                                className="h-11 border-gray-300 bg-white text-gray-900 font-mono uppercase tracking-widest focus-visible:ring-indigo-600 focus-visible:border-indigo-600"
-                                value={formData.inviteCode}
-                                onChange={(e) => setFormData({ ...formData, inviteCode: e.target.value.toUpperCase() })}
-                            />
-                        </div>
-                    )}
-
-                    <hr className="my-6 border-gray-200" />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="fullName" className="text-sm font-medium text-gray-700">Full Name</Label>
-                            <Input
-                                id="fullName"
-                                type="text"
-                                required
-                                className="h-11 border-gray-300 bg-white text-gray-900 focus-visible:ring-indigo-600 focus-visible:border-indigo-600"
-                                value={formData.fullName}
-                                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="emailAddress" className="text-sm font-medium text-gray-700">Email Address</Label>
-                            <Input
-                                id="emailAddress"
-                                type="email"
-                                required
-                                className="h-11 border-gray-300 bg-white text-gray-900 focus-visible:ring-indigo-600 focus-visible:border-indigo-600"
-                                value={formData.emailAddress}
-                                onChange={(e) => setFormData({ ...formData, emailAddress: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <Label htmlFor="password" className="text-sm font-medium text-gray-700">Password</Label>
-                        <div className="relative">
-                            <Input
-                                id="password"
-                                type={showPassword ? "text" : "password"}
-                                required
-                                className="h-11 border-gray-300 bg-white text-gray-900 pr-10 focus-visible:ring-indigo-600 focus-visible:border-indigo-600"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                            >
-                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                        </div>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 font-medium text-gray-900 transition-colors hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                        {loading ? <Loader2 className="animate-spin" /> : "Complete Setup"}
-                    </button>
-                </form>
-
-                <p className="mt-8 text-center text-sm text-gray-500">
-                    Already have an account? <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-700 hover:underline">Log in</Link>
-                </p>
+                    );
+                })}
             </div>
-        </div>
+
+            {error && (
+                <div role="alert" className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    {error}
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+                {mode === "create" ? (
+                    <div>
+                        <label htmlFor="workspaceName" className={label}>Workspace or company name</label>
+                        <input
+                            id="workspaceName"
+                            type="text"
+                            required
+                            maxLength={80}
+                            autoComplete="organization"
+                            placeholder="e.g. Northwind Studio"
+                            className={`${field} h-11`}
+                            value={formData.workspaceName}
+                            onChange={update("workspaceName")}
+                        />
+                        <p className="mt-1.5 text-xs text-gray-600">You'll be the admin and get an invite code to share with your team.</p>
+                    </div>
+                ) : (
+                    <div>
+                        <label htmlFor="inviteCode" className={label}>Invite code</label>
+                        <input
+                            id="inviteCode"
+                            type="text"
+                            required
+                            maxLength={6}
+                            autoComplete="off"
+                            autoCapitalize="characters"
+                            spellCheck={false}
+                            placeholder="A8X2L5"
+                            className={`${field} h-11 font-mono uppercase tracking-[0.2em]`}
+                            value={formData.inviteCode}
+                            onChange={(e) => setFormData({ ...formData, inviteCode: e.target.value.toUpperCase().replace(/\s/g, "") })}
+                        />
+                        <p className="mt-1.5 text-xs text-gray-600">Ask your workspace admin for the 6-character code. New members join as Stakeholders.</p>
+                    </div>
+                )}
+
+                <hr className="border-gray-200" />
+
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div>
+                        <label htmlFor="fullName" className={label}>Full name</label>
+                        <input id="fullName" type="text" required maxLength={80} autoComplete="name" className={`${field} h-11`} value={formData.fullName} onChange={update("fullName")} />
+                    </div>
+                    <div>
+                        <label htmlFor="emailAddress" className={label}>Email address</label>
+                        <input id="emailAddress" type="email" required autoComplete="email" inputMode="email" className={`${field} h-11`} value={formData.emailAddress} onChange={update("emailAddress")} />
+                    </div>
+                </div>
+
+                <div>
+                    <label htmlFor="password" className={label}>Password</label>
+                    <div className="relative">
+                        <input
+                            id="password"
+                            type={showPassword ? "text" : "password"}
+                            required
+                            autoComplete="new-password"
+                            className={`${field} h-11 pr-11`}
+                            value={formData.password}
+                            onChange={update("password")}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                            aria-pressed={showPassword}
+                            className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+                        >
+                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" disabled={loading} className={`${btn.primary} h-11 w-full`}>
+                    {loading
+                        ? <><Loader2 size={18} className="animate-spin" aria-hidden="true" /> Creating account…</>
+                        : mode === "create" ? "Create workspace" : "Join workspace"}
+                </button>
+            </form>
+        </AuthShell>
     );
 };

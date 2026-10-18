@@ -1,25 +1,56 @@
+import { useNavigate, Link } from "react-router-dom";
 import GradientBlinds from "../components/GradientBlinds";
 import ScrollStack, { ScrollStackItem } from "../components/ScrollStack";
+import { btn } from "../lib/styles";
 
-import { useNavigate } from "react-router-dom";
+const features = [
+    { title: "Kanban Precision", description: "Manage tasks with clean drag-and-drop movement that syncs via WebSockets.", tag: "Workflow" },
+    { title: "AI Assistant", description: "Ask for project summaries or help finding tasks directly in your dashboard.", tag: "Assistant" },
+    { title: "Role-Based Access", description: "Admins, managers, and members see exactly what they need.", tag: "Security" },
+    { title: "Audit History", description: "Activity logging helps you stay aligned across the team.", tag: "Reporting" }
+];
+
+const prefersReducedMotion = () =>
+    typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+const FeatureBody = ({ feature }) => (
+    <div className="relative z-10">
+        <span className="mb-4 inline-block rounded-md bg-white px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
+            {feature.tag}
+        </span>
+        <h3 className="mb-3 text-2xl font-semibold tracking-tight text-gray-900 sm:mb-4 sm:text-4xl">{feature.title}</h3>
+        <p className="max-w-lg text-base leading-relaxed text-gray-700 sm:text-xl">{feature.description}</p>
+    </div>
+);
 
 export const LandingPage = () => {
     const navigate = useNavigate();
-    const features = [
-        { title: "Kanban Precision", description: "Manage tasks with clean drag-and-drop movement that syncs via WebSockets.", tag: "Workflow", color: "from-gray-100 to-white" },
-        { title: "AI Assistant", description: "Ask for project summaries or help finding tasks directly in your dashboard.", tag: "Assistant", color: "from-gray-100 to-white" },
-        { title: "Role-Based Access", description: "Admins, managers, and members see exactly what they need.", tag: "Security", color: "from-gray-100 to-white" },
-        { title: "Audit History", description: "Activity logging helps you stay aligned across the team.", tag: "Reporting", color: "from-gray-100 to-white" }
-    ];
+    const reduceMotion = prefersReducedMotion();
 
     return (
-        <div className="relative bg-gray-50 text-gray-900 selection:bg-gray-200 overflow-hidden">
+        <div className="relative bg-gray-50 text-gray-900 selection:bg-gray-200">
+
+            {/* --- TOP BAR --- */}
+            <header className="absolute inset-x-0 top-0 z-30">
+                <nav aria-label="Primary" className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+                    <Link to="/" className="flex items-center gap-2.5 rounded-lg">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900">
+                            <span className="h-2.5 w-2.5 rounded-full bg-white" />
+                        </span>
+                        <span className="text-lg font-semibold tracking-tight">TeamPulse</span>
+                    </Link>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                        <Link to="/login" className={`${btn.ghost} text-gray-800 hover:bg-white/70`}>Sign in</Link>
+                        <Link to="/register" className={`${btn.primary} hidden sm:inline-flex`}>Get started</Link>
+                    </div>
+                </nav>
+            </header>
 
             {/* --- HERO SECTION --- */}
-            <section className="relative flex h-screen flex-col items-center justify-center px-4 overflow-hidden bg-gray-50">
+            <section className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-gray-50 px-4">
 
                 {/*  Interactive Gradient Blinds Background  */}
-                <div className="absolute inset-0 w-full h-full z-0 opacity-40">
+                <div className="absolute inset-0 z-0 h-full w-full opacity-40" aria-hidden="true">
                     <GradientBlinds
                         gradientColors={['#E5E7EB', '#F3F4F6', '#E5E7EB']} // neutral grays
                         angle={30}
@@ -36,89 +67,86 @@ export const LandingPage = () => {
                 </div>
 
                 {/* Sub-glows to blend the sharp edges */}
-                <div className="absolute -top-[10%] -left-[10%] h-[500px] w-[500px] rounded-full bg-gray-200/60 blur-[120px] pointer-events-none z-0" />
-                <div className="absolute top-[20%] -right-[10%] h-[400px] w-[400px] rounded-full bg-gray-200/40 blur-[100px] pointer-events-none z-0" />
+                <div className="pointer-events-none absolute -left-[10%] -top-[10%] z-0 h-125 w-125 rounded-full bg-gray-200/60 blur-[120px]" aria-hidden="true" />
+                <div className="pointer-events-none absolute -right-[10%] top-[20%] z-0 h-100 w-100 rounded-full bg-gray-200/40 blur-[100px]" aria-hidden="true" />
 
                 {/* --- THE TEXT CONTENT --- */}
-                <div className="z-10 text-center pointer-events-none">
-
-                    
-
-                    <h1
-                       
-                       
-                       
-                        className="mb-6 text-6xl font-extrabold tracking-tighter md:text-8xl drop-shadow-2xl"
-                    >
-                        Team<span className="text-gray-900">Pulse</span>
+                <div className="pointer-events-none z-10 text-center">
+                    <h1 className="mb-6 text-6xl font-extrabold tracking-[-0.04em] drop-shadow-2xl md:text-8xl">
+                        TeamPulse
                     </h1>
 
-                    <p
-                       
-                       
-                       
-                        className="mx-auto mb-10 max-w-xl text-lg text-gray-700 md:text-xl font-medium drop-shadow-md"
-                    >
+                    <p className="mx-auto mb-10 max-w-xl text-lg font-medium text-gray-800 drop-shadow-md md:text-xl">
                         Ditch the chaos. Experience project management that breathes with your team.
                     </p>
 
-                    <div
-                       
-                       
-                       
-                        className="flex gap-4 justify-center pointer-events-auto"
-                    >
+                    <div className="pointer-events-auto flex flex-col items-center justify-center gap-3 sm:flex-row">
+                        <button
+                            onClick={() => navigate('/register')}
+                            className="cursor-pointer rounded-full bg-gray-900 px-8 py-4 font-semibold text-white shadow-[0_8px_24px_-8px_rgba(15,23,42,0.5)] transition-colors hover:bg-gray-800 active:translate-y-px"
+                        >
+                            Create your workspace
+                        </button>
                         <button
                             onClick={() => navigate('/login')}
-                            className="rounded-full border border-gray-300 bg-white px-8 py-4 font-semibold text-gray-900 shadow-sm hover:bg-gray-100 transition-colors cursor-pointer"
+                            className="cursor-pointer rounded-full border border-gray-300 bg-white px-8 py-4 font-semibold text-gray-900 shadow-sm transition-colors hover:bg-gray-100 active:translate-y-px"
                         >
-                            Get Started Free
+                            Sign in
                         </button>
                     </div>
-
                 </div>
             </section>
 
-            {/*  SCROLL STACK SECTION  */}
-            <section className="relative h-screen bg-gray-50 w-full z-20 border-t border-gray-200">
-                <ScrollStack
-                    itemDistance={120}
-                    itemScale={0.05}
-                    itemStackDistance={40}
-                    blurAmount={4} // Adds depth of field blur to the cards in the back
-                    className="h-full w-full"
-                >
-                    <div className="text-center pt-20 pb-10">
-                        <h2 className="text-4xl font-bold tracking-tight md:text-5xl">Built for speed. <br /><span className="text-gray-400">Designed for scale.</span></h2>
-                        <p className="mt-4 text-lg text-gray-500">Scroll to explore the core features.</p>
-                    </div>
+            {/*  FEATURES  */}
+            <section className="relative z-20 w-full border-t border-gray-200 bg-gray-50" aria-labelledby="features-heading">
+                <div className="px-4 pb-4 pt-20 text-center">
+                    <h2 id="features-heading" className="text-4xl font-bold tracking-tight md:text-5xl">Built for speed. <br /><span className="text-gray-500">Designed for scale.</span></h2>
+                    <p className="mt-4 text-lg text-gray-600">Everything your team needs to ship, in one place.</p>
+                </div>
 
-                    {features.map((feature, index) => (
-                        <ScrollStackItem
-                            key={index}
-                            itemClassName={`bg-gradient-to-br ${feature.color} flex flex-col justify-between p-10 overflow-hidden border border-gray-200`}
-                        >
-                            <div className="relative z-10">
-                                <span className="mb-4 inline-block rounded-full bg-gray-50/50 border border-gray-200 px-3 py-1 text-xs font-bold uppercase tracking-wider text-gray-700 backdrop-blur-md">
-                                    {feature.tag}
-                                </span>
-                                <h3 className="mb-4 text-4xl font-bold text-gray-900">{feature.title}</h3>
-                                <p className="text-xl text-gray-700 leading-relaxed max-w-lg">{feature.description}</p>
+                {reduceMotion ? (
+                    <div className="mx-auto grid max-w-3xl gap-6 px-4 py-12">
+                        {features.map((feature) => (
+                            <div key={feature.title} className="rounded-3xl border border-gray-200 bg-linear-to-br from-gray-100 to-white p-6 sm:p-10">
+                                <FeatureBody feature={feature} />
                             </div>
-                        </ScrollStackItem>
-                    ))}
-                </ScrollStack>
+                        ))}
+                    </div>
+                ) : (
+                    // Window-scroll mode: the stack animates with the page instead of trapping the wheel in an inner scroller.
+                    <ScrollStack
+                        useWindowScroll
+                        itemDistance={120}
+                        itemScale={0.05}
+                        itemStackDistance={40}
+                        blurAmount={4} // Adds depth of field blur to the cards in the back
+                        className="w-full"
+                    >
+                        {features.map((feature) => (
+                            <ScrollStackItem
+                                key={feature.title}
+                                itemClassName="flex flex-col justify-between overflow-hidden border border-gray-200 bg-linear-to-br from-gray-100 to-white p-6 sm:p-10"
+                            >
+                                <FeatureBody feature={feature} />
+                            </ScrollStackItem>
+                        ))}
+                    </ScrollStack>
+                )}
             </section>
 
             {/* --- FOOTER --- */}
-            <section className="flex h-[50vh] flex-col items-center justify-center border-t border-gray-200 bg-gray-50 z-10">
+            <section className="relative z-10 flex min-h-[50vh] flex-col items-center justify-center border-t border-gray-200 bg-gray-50 px-4 py-20 text-center">
                 <h2 className="text-3xl font-bold text-gray-900">Ready to take control?</h2>
+                <p className="mt-3 max-w-md text-gray-600">Spin up a workspace in under a minute and invite your team with a single code.</p>
                 <button
                     onClick={() => navigate('/register')}
-                    className="mt-8 rounded-full border border-gray-300 bg-white px-8 py-4 font-semibold text-gray-900 shadow-sm hover:bg-gray-100 transition-colors cursor-pointer"
+                    className="mt-8 cursor-pointer rounded-full bg-gray-900 px-8 py-4 font-semibold text-white shadow-[0_8px_24px_-8px_rgba(15,23,42,0.5)] transition-colors hover:bg-gray-800 active:translate-y-px"
                 >
                     Create your workspace
                 </button>
+                <p className="mt-6 text-sm text-gray-600">
+                    Already on a team? <Link to="/login" className="font-medium text-gray-900 underline underline-offset-4">Sign in</Link>
+                </p>
             </section>
 
         </div>

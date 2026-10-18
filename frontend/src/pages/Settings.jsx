@@ -1,81 +1,126 @@
 import { useState, useRef, useEffect } from "react";
 import { useStore } from "../store/useStore";
-import { User, Mail, Shield, Camera, CheckCircle, AlertCircle, Users, Loader2, Edit3, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Mail, Phone, Shield, Camera, CheckCircle2, AlertCircle, Loader2, Pencil, Copy, Check } from "lucide-react";
 import api from "../lib/axios";
+import { Avatar } from "../components/ui/avatar";
+import { btn, card, field, label } from "../lib/styles";
+import { formatDate, errorMessage } from "../lib/format";
+import { toast } from "../lib/toast";
+import { cn } from "../lib/utils";
+
+const ROLES = ["Admin", "Project Manager", "Team Member", "Stakeholder"];
+
+const Section = ({ title, description, children, className }) => (
+    <section className={cn(card, "p-5 sm:p-8", className)}>
+        <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}
+        </div>
+        {children}
+    </section>
+);
+
+const copyText = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { console.error(e); }
+        document.body.removeChild(textArea);
+        return ok;
+    }
+};
 
 export const Settings = () => {
     const { user, updateUser } = useStore();
+    const isAdmin = user?.role?.roleName === 'Admin';
     const [uploading, setUploading] = useState(false);
-    const [uploadStatus, setUploadStatus] = useState(null); // 'success' | 'error'
     const [workspaceUsers, setWorkspaceUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
+    const [usersError, setUsersError] = useState(false);
+    const [savingUserId, setSavingUserId] = useState(null);
+    const [copied, setCopied] = useState(false);
     const fileInputRef = useRef(null);
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [profileLoading, setProfileLoading] = useState(false);
-    const [profileData, setProfileData] = useState({
-        fullName: user?.fullName || "",
-        emailAddress: user?.emailAddress || "",
-        phoneNumber: user?.phoneNumber || "",
-        password: ""
-    });
+    const [profileError, setProfileError] = useState("");
+    const [profileData, setProfileData] = useState({ fullName: "", emailAddress: "", phoneNumber: "", password: "" });
 
     // Fetch workspace users if the user is an Admin
     useEffect(() => {
-        if (user?.role?.roleName === 'Admin') {
-            const fetchUsers = async () => {
-                setLoadingUsers(true);
-                try {
-                    const res = await api.get('/auth/workspace/users');
-                    setWorkspaceUsers(res.data);
-                } catch (err) {
-                    console.error("Failed to fetch workspace users", err);
-                } finally {
-                    setLoadingUsers(false);
-                }
-            };
-            fetchUsers();
-        }
-    }, [user?.role?.roleName]);
+        if (!isAdmin) return;
+        const fetchUsers = async () => {
+            setLoadingUsers(true);
+            setUsersError(false);
+            try {
+                const res = await api.get('/auth/workspace/users');
+                setWorkspaceUsers(res.data);
+            } catch (err) {
+                console.error("Failed to fetch workspace users", err);
+                setUsersError(true);
+            } finally {
+                setLoadingUsers(false);
+            }
+        };
+        fetchUsers();
+    }, [isAdmin]);
 
-    const handleRoleChange = async (targetUserId, newRoleName) => {
+    const startEditing = () => {
+        setProfileData({ fullName: user?.fullName || "", emailAddress: user?.emailAddress || "", phoneNumber: user?.phoneNumber || "", password: "" });
+        setProfileError("");
+        setIsEditingProfile(true);
+    };
+
+    // Optimistic admin updates with rollback on failure.
+    const updateMember = async (targetUserId, patch, request, successMsg) => {
+        const previous = workspaceUsers;
+        setWorkspaceUsers(prev => prev.map(u => (u._id === targetUserId ? { ...u, ...patch(u) } : u)));
+        setSavingUserId(targetUserId);
         try {
-            await api.put(`/auth/workspace/users/${targetUserId}/role`, { roleName: newRoleName });
-            
-            // Update local state to reflect change immediately
-            setWorkspaceUsers(prev => prev.map(u => 
-                u._id === targetUserId 
-                  ? { ...u, role: { ...u.role, roleName: newRoleName } } 
-                  : u
-            ));
+            await request();
+            toast.success(successMsg);
         } catch (err) {
-            alert(err.response?.data?.message || "Failed to update role");
+            setWorkspaceUsers(previous);
+            toast.error("Change not saved", errorMessage(err));
+        } finally {
+            setSavingUserId(null);
         }
     };
 
-    const handleStatusChange = async (targetUserId, newStatus) => {
-        try {
-            await api.put(`/auth/workspace/users/${targetUserId}/status`, { status: newStatus });
-            
-            // Update local state to reflect change immediately
-            setWorkspaceUsers(prev => prev.map(u => 
-                u._id === targetUserId 
-                  ? { ...u, status: newStatus } 
-                  : u
-            ));
-        } catch (err) {
-            alert(err.response?.data?.message || "Failed to update status");
-        }
-    };
+    const handleRoleChange = (member, newRoleName) =>
+        updateMember(
+            member._id,
+            (u) => ({ role: { ...u.role, roleName: newRoleName } }),
+            () => api.put(`/auth/workspace/users/${member._id}/role`, { roleName: newRoleName }),
+            `${member.fullName || "Member"} is now ${newRoleName}`
+        );
+
+    const handleStatusChange = (member, newStatus) =>
+        updateMember(
+            member._id,
+            () => ({ status: newStatus }),
+            () => api.put(`/auth/workspace/users/${member._id}/status`, { status: newStatus }),
+            `${member.fullName || "Member"} ${newStatus === "Inactive" ? "deactivated" : "reactivated"}`
+        );
 
     const handleAvatarChange = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        if (!file.type.startsWith("image/")) {
+            toast.error("That's not an image", "Choose a JPG, PNG, GIF or WebP file.");
+            return;
+        }
+        if (file.size > 50 * 1024 * 1024) {
+            toast.error("Image too large", "Profile pictures must be under 50 MB.");
+            return;
+        }
 
         setUploading(true);
-        setUploadStatus(null);
-
         try {
             const formData = new FormData();
             formData.append('file', file);
@@ -86,12 +131,11 @@ export const Settings = () => {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
-            // Update the local user state with the new profile picture URL
             updateUser({ profilePicture: res.data.file.url });
-            setUploadStatus('success');
+            toast.success("Profile picture updated");
         } catch (err) {
             console.error("Failed to upload profile picture", err);
-            setUploadStatus('error');
+            toast.error("Upload failed", errorMessage(err, "Your picture couldn't be uploaded. Please try again."));
         } finally {
             setUploading(false);
             // Reset input so same file can be re-selected
@@ -102,249 +146,218 @@ export const Settings = () => {
     const handleProfileUpdate = async (e) => {
         e.preventDefault();
         setProfileLoading(true);
+        setProfileError("");
         try {
-            const res = await api.put('/auth/profile', profileData);
+            const payload = { ...profileData, fullName: profileData.fullName.trim(), emailAddress: profileData.emailAddress.trim() };
+            if (!payload.password) delete payload.password;
+            const res = await api.put('/auth/profile', payload);
             updateUser(res.data.user);
             setIsEditingProfile(false);
-            setProfileData({ ...profileData, password: "" }); // Clear password
+            setProfileData(d => ({ ...d, password: "" }));
+            toast.success("Profile saved");
         } catch (err) {
-            alert(err.response?.data?.message || "Failed to update profile");
+            setProfileError(errorMessage(err, "Couldn't save your profile. Please try again."));
         } finally {
             setProfileLoading(false);
         }
     };
 
+    const handleCopyInvite = async () => {
+        const ok = await copyText(user?.workspace?.inviteCode || "");
+        if (ok) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } else {
+            toast.error("Couldn't copy", "Select the code and copy it manually.");
+        }
+    };
+
     return (
-        <div className="max-w-3xl mx-auto space-y-8">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight text-gray-900">Account Settings</h2>
-                <p className="mt-2 text-gray-500">Manage your profile and preferences.</p>
+        <div className="mx-auto max-w-3xl space-y-6 pb-12">
+            <div className="border-b border-gray-200 pb-6">
+                <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">Settings</h1>
+                <p className="mt-2 text-gray-600">Your profile, your workspace, and who can do what.</p>
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 shadow-xl">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-8 pb-8 border-b border-gray-200">
-                    {/* Avatar with upload overlay */}
-                    <div className="relative shrink-0">
-                        <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-100 text-gray-700 overflow-hidden">
-                            {user?.profilePicture ? (
-                                <img
-                                    src={user.profilePicture}
-                                    alt={user.fullName}
-                                    className="h-full w-full object-cover"
-                                />
-                            ) : (
-                                <User size={40} />
-                            )}
-                        </div>
-
-                        {/* Camera overlay button */}
+            {/* --- PROFILE --- */}
+            <Section title="Profile">
+                <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+                    {/* Avatar with upload button */}
+                    <div className="relative shrink-0 self-start">
+                        <Avatar name={user?.fullName} src={user?.profilePicture} size="xl" />
                         <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-gray-700 shadow-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
-                            title="Upload profile picture"
+                            className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-[0_2px_6px_rgba(15,23,42,0.12)] transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:opacity-70"
+                            aria-label={uploading ? "Uploading profile picture" : "Change profile picture"}
                         >
-                            {uploading ? (
-                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                            ) : (
-                                <Camera size={14} />
-                            )}
+                            {uploading ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />}
                         </button>
-
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handleAvatarChange}
-                        />
-                    </div>
-                    <div className="space-y-4 mt-8 pb-4">
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Workspace Details</h4>
-                        <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <div>
-                                <h5 className="font-bold text-gray-900 text-lg">{user?.workspace?.workspaceName}</h5>
-                                {user?.role?.roleName === 'Admin' ? (
-                                    <p className="text-sm text-gray-500">Share this invite code with developers so they can join your workspace.</p>
-                                ) : (
-                                    <p className="text-sm text-gray-500">You are a member of this workspace.</p>
-                                )}
-                            </div>
-
-                            {user?.role?.roleName === 'Admin' && (
-                                <div className="flex flex-col items-center gap-2">
-                                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Invite Code</span>
-                                    <div className="group relative flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-6 py-3 transition-colors hover:border-gray-300">
-                                        <span className="font-mono text-2xl font-bold tracking-[0.25em] text-gray-900">
-                                            {user?.workspace?.inviteCode || '------'}
-                                        </span>
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    await navigator.clipboard.writeText(user?.workspace?.inviteCode);
-                                                } catch (err) {
-                                                    const textArea = document.createElement("textarea");
-                                                    textArea.value = user?.workspace?.inviteCode;
-                                                    document.body.appendChild(textArea);
-                                                    textArea.select();
-                                                    try { document.execCommand('copy'); } catch (e) { console.error(e); }
-                                                    document.body.removeChild(textArea);
-                                                }
-                                            }}
-                                            className="text-gray-700 opacity-60 transition-opacity hover:opacity-100"
-                                            title="Copy to clipboard"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} tabIndex={-1} aria-hidden="true" />
                     </div>
 
-                    <div className="flex-1 w-full">
+                    <div className="min-w-0 flex-1">
                         {isEditingProfile ? (
-                            <form onSubmit={handleProfileUpdate} className="space-y-4 w-full max-w-md">
-                                <div className="space-y-1">
-                                    <Label>Full Name</Label>
-                                    <Input value={profileData.fullName} onChange={e => setProfileData({...profileData, fullName: e.target.value})} />
+                            <form onSubmit={handleProfileUpdate} className="w-full max-w-md space-y-4">
+                                {profileError && (
+                                    <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                                        <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /> {profileError}
+                                    </div>
+                                )}
+                                <div>
+                                    <label htmlFor="profile-name" className={label}>Full name</label>
+                                    <input id="profile-name" required maxLength={80} autoComplete="name" className={field} value={profileData.fullName} onChange={e => setProfileData({ ...profileData, fullName: e.target.value })} />
                                 </div>
-                                <div className="space-y-1">
-                                    <Label>Email</Label>
-                                    <Input type="email" value={profileData.emailAddress} onChange={e => setProfileData({...profileData, emailAddress: e.target.value})} />
+                                <div>
+                                    <label htmlFor="profile-email" className={label}>Email</label>
+                                    <input id="profile-email" type="email" required autoComplete="email" className={field} value={profileData.emailAddress} onChange={e => setProfileData({ ...profileData, emailAddress: e.target.value })} />
                                 </div>
-                                <div className="space-y-1">
-                                    <Label>Phone Number</Label>
-                                    <Input type="tel" value={profileData.phoneNumber} onChange={e => setProfileData({...profileData, phoneNumber: e.target.value})} />
+                                <div>
+                                    <label htmlFor="profile-phone" className={label}>Phone number <span className="font-normal text-gray-500">(optional)</span></label>
+                                    <input id="profile-phone" type="tel" autoComplete="tel" className={field} value={profileData.phoneNumber} onChange={e => setProfileData({ ...profileData, phoneNumber: e.target.value })} />
                                 </div>
-                                <div className="space-y-1">
-                                    <Label>New Password <span className="text-gray-400 text-xs">(optional)</span></Label>
-                                    <Input type="password" placeholder="Leave blank to keep current" value={profileData.password} onChange={e => setProfileData({...profileData, password: e.target.value})} />
+                                <div>
+                                    <label htmlFor="profile-password" className={label}>New password <span className="font-normal text-gray-500">(optional)</span></label>
+                                    <input id="profile-password" type="password" autoComplete="new-password" placeholder="Leave blank to keep your current password" className={field} value={profileData.password} onChange={e => setProfileData({ ...profileData, password: e.target.value })} />
                                 </div>
                                 <div className="flex gap-2 pt-2">
-                                    <button type="button" onClick={() => setIsEditingProfile(false)} className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900">
-                                        Cancel
+                                    <button type="submit" disabled={profileLoading} className={btn.primary}>
+                                        {profileLoading ? <><Loader2 className="animate-spin" size={16} aria-hidden="true" /> Saving…</> : "Save changes"}
                                     </button>
-                                    <button type="submit" disabled={profileLoading} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
-                                        {profileLoading ? <Loader2 className="animate-spin" size={16} /> : "Save Changes"}
-                                    </button>
+                                    <button type="button" onClick={() => setIsEditingProfile(false)} className={btn.ghost}>Cancel</button>
                                 </div>
                             </form>
                         ) : (
                             <>
-                                <div className="flex items-center gap-3">
-                                    <h3 className="text-2xl font-bold text-gray-900">{user?.fullName}</h3>
-                                    <button onClick={() => setIsEditingProfile(true)} className="text-gray-400 hover:text-indigo-600 transition-colors" title="Edit Profile">
-                                        <Edit3 size={16} />
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <h3 className="min-w-0 text-xl font-semibold text-gray-900 wrap-anywhere">{user?.fullName}</h3>
+                                    <button onClick={startEditing} className={btn.secondary}>
+                                        <Pencil size={14} aria-hidden="true" /> Edit profile
                                     </button>
                                 </div>
-                                <p className="text-gray-500 flex items-center gap-2 mt-2">
-                                    <Mail size={16} /> {user?.emailAddress}
-                                </p>
-                                {user?.phoneNumber && (
-                                    <p className="text-gray-500 flex items-center gap-2 mt-2">
-                                        <span className="font-medium text-xs">Phone:</span> {user.phoneNumber}
-                                    </p>
-                                )}
-                                {user?.isVerified && (
-                                    <p className="text-emerald-500 flex items-center gap-2 mt-2 text-xs">
-                                        <CheckCircle size={14} /> Verified Account
-                                    </p>
-                                )}
-                                <div className="flex flex-wrap gap-3 mt-3">
-                                    <span className="text-gray-700 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-200">
-                                        <Shield size={14} /> {user?.role?.roleName || "Team Member"}
+                                <dl className="mt-3 space-y-2 text-sm text-gray-700">
+                                    <div className="flex items-center gap-2">
+                                        <dt><Mail size={15} className="text-gray-500" aria-label="Email" /></dt>
+                                        <dd className="min-w-0 truncate">{user?.emailAddress}</dd>
+                                    </div>
+                                    {user?.phoneNumber && (
+                                        <div className="flex items-center gap-2">
+                                            <dt><Phone size={15} className="text-gray-500" aria-label="Phone" /></dt>
+                                            <dd>{user.phoneNumber}</dd>
+                                        </div>
+                                    )}
+                                </dl>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <span className="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-800 ring-1 ring-inset ring-gray-200">
+                                        <Shield size={13} aria-hidden="true" /> {user?.role?.roleName || "Team Member"}
                                     </span>
-                                    <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${user?.status === 'Inactive' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                                        {user?.status || "Active"} Status
+                                    <span className={cn(
+                                        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
+                                        user?.status === 'Inactive' ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-emerald-50 text-emerald-800 ring-emerald-200'
+                                    )}>
+                                        {user?.status || "Active"}
                                     </span>
+                                    {user?.isVerified && (
+                                        <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200">
+                                            <CheckCircle2 size={13} aria-hidden="true" /> Verified
+                                        </span>
+                                    )}
                                 </div>
-
-                                {/* Upload feedback */}
-                                {uploadStatus === 'success' && (
-                                    <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-700">
-                                        <CheckCircle size={13} /> Profile picture updated successfully.
-                                    </p>
-                                )}
-                                {uploadStatus === 'error' && (
-                                    <p className="mt-2 flex items-center gap-1.5 text-xs text-red-400">
-                                        <AlertCircle size={13} /> Failed to upload. Please try again.
-                                    </p>
-                                )}
-                                <p className="mt-2 text-xs text-gray-400">Click the camera icon to update your profile picture.</p>
                             </>
                         )}
                     </div>
                 </div>
+            </Section>
 
-            </div>
-
-            {/* --- ADMIN USER MANAGEMENT PANEL --- */}
-            {user?.role?.roleName === 'Admin' && (
-                <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 shadow-xl mt-8">
-                    <div className="flex items-center gap-3 mb-6 border-b border-gray-200 pb-4">
-                        <Users className="text-gray-700" size={24} />
-                        <div>
-                            <h3 className="text-xl font-bold text-gray-900">User Management</h3>
-                            <p className="text-sm text-gray-500">Upgrade or modify permissions for members in your workspace.</p>
-                        </div>
+            {/* --- WORKSPACE --- */}
+            <Section
+                title="Workspace"
+                description={isAdmin ? "Share the invite code so teammates can join. New members join as Stakeholders." : "You're a member of this workspace."}
+            >
+                <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-600">Workspace name</p>
+                        <p className="mt-0.5 truncate font-semibold text-gray-900">{user?.workspace?.workspaceName || "—"}</p>
                     </div>
 
-                    {loadingUsers ? (
-                        <div className="flex justify-center p-8 text-gray-500"><Loader2 className="animate-spin" /></div>
-                    ) : (
-                        <div className="space-y-4">
-                            {workspaceUsers.map((member) => (
-                                <div key={member._id} className="flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border border-gray-200 bg-white border-gray-200 gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gray-100 flex items-center justify-center text-gray-700 text-sm font-bold border border-gray-200">
-                                            {member.profilePicture ? (
-                                                <img src={member.profilePicture} alt={member.fullName} className="h-full w-full object-cover" />
-                                            ) : (
-                                                member.fullName[0].toUpperCase()
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-900">{member.fullName}</p>
-                                            <p className="text-xs text-gray-400">{member.emailAddress}</p>
-                                            {member.lastLogin && <p className="text-[10px] text-gray-400 mt-1">Last Login: {new Date(member.lastLogin).toLocaleDateString()}</p>}
-                                        </div>
-                                    </div>
-
-                                    {/* Role & Status Management */}
-                                    <div className="flex flex-col md:flex-row items-end md:items-center gap-4 w-full md:w-auto">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xs text-gray-400 uppercase tracking-widest">Role</span>
-                                            <select
-                                                disabled={member._id === user._id}
-                                                value={member.role?.roleName}
-                                                onChange={(e) => handleRoleChange(member._id, e.target.value)}
-                                                className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none disabled:opacity-50"
-                                            >
-                                                <option value="Admin">Admin</option>
-                                                <option value="Project Manager">Project Manager</option>
-                                                <option value="Team Member">Team Member</option>
-                                                <option value="Stakeholder">Stakeholder</option>
-                                            </select>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xs text-gray-400 uppercase tracking-widest">Status</span>
-                                            <select
-                                                disabled={member._id === user._id}
-                                                value={member.status || "Active"}
-                                                onChange={(e) => handleStatusChange(member._id, e.target.value)}
-                                                className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none disabled:opacity-50"
-                                            >
-                                                <option value="Active">Active</option>
-                                                <option value="Inactive">Inactive</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+                    {isAdmin && (
+                        <div>
+                            <p className="text-xs text-gray-600" id="invite-code-label">Invite code</p>
+                            <div className="mt-1 flex items-center gap-2">
+                                <span aria-labelledby="invite-code-label" className="select-all rounded-lg border border-gray-200 bg-white px-4 py-2 font-mono text-xl font-semibold tracking-[0.25em] text-gray-900">
+                                    {user?.workspace?.inviteCode || '------'}
+                                </span>
+                                <button onClick={handleCopyInvite} className={btn.secondary} aria-label="Copy invite code">
+                                    {copied ? <Check size={16} className="text-emerald-600" aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                                    <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
+            </Section>
+
+            {/* --- ADMIN USER MANAGEMENT PANEL --- */}
+            {isAdmin && (
+                <Section title="Members" description="Change roles or deactivate people in your workspace. You can't change your own access.">
+                    {loadingUsers ? (
+                        <div className="space-y-3" role="status" aria-label="Loading members">
+                            {[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
+                        </div>
+                    ) : usersError ? (
+                        <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">Couldn't load workspace members. Refresh the page to try again.</p>
+                    ) : (
+                        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+                            {workspaceUsers.map((member) => {
+                                const isSelf = member._id === user._id;
+                                const saving = savingUserId === member._id;
+                                return (
+                                    <li key={member._id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <Avatar name={member.fullName || member.emailAddress} src={member.profilePicture} size="lg" />
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-semibold text-gray-900">
+                                                    {member.fullName || "Unnamed member"} {isSelf && <span className="font-normal text-gray-500">(you)</span>}
+                                                </p>
+                                                <p className="truncate text-xs text-gray-600">{member.emailAddress}</p>
+                                                {member.lastLogin && <p className="mt-0.5 text-xs text-gray-500">Last sign-in {formatDate(member.lastLogin)}</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Role & Status Management */}
+                                        <div className="grid shrink-0 grid-cols-2 gap-2 md:flex md:items-center">
+                                            <div>
+                                                <label htmlFor={`role-${member._id}`} className="sr-only">Role for {member.fullName}</label>
+                                                <select
+                                                    id={`role-${member._id}`}
+                                                    disabled={isSelf || saving}
+                                                    value={member.role?.roleName || ""}
+                                                    onChange={(e) => handleRoleChange(member, e.target.value)}
+                                                    className={cn(field, "md:w-44")}
+                                                >
+                                                    {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label htmlFor={`status-${member._id}`} className="sr-only">Status for {member.fullName}</label>
+                                                <select
+                                                    id={`status-${member._id}`}
+                                                    disabled={isSelf || saving}
+                                                    value={member.status || "Active"}
+                                                    onChange={(e) => handleStatusChange(member, e.target.value)}
+                                                    className={cn(field, "md:w-32", member.status === "Inactive" && "text-red-700")}
+                                                >
+                                                    <option value="Active">Active</option>
+                                                    <option value="Inactive">Inactive</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </Section>
             )}
         </div>
     );

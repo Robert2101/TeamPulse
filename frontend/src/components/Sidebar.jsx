@@ -1,7 +1,11 @@
 import { useState } from "react";
-import { LayoutDashboard, FolderKanban, ListChecks, MessageSquare, Activity, Settings, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LayoutDashboard, FolderKanban, ListChecks, MessageSquare, Activity, Settings, LogOut, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useStore } from "../store/useStore";
+import { Avatar } from "./ui/avatar";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
+import { btn } from "../lib/styles";
+import { cn } from "../lib/utils";
 
 const menuItems = [
     { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
@@ -11,17 +15,27 @@ const menuItems = [
     { icon: Activity, label: "Audit Log", path: "/activity" },
 ];
 
-export const Sidebar = ({ isCollapsed, toggleSidebar }) => {
+const isActivePath = (pathname, path) =>
+    pathname === path || (path === "/projects" && pathname.startsWith("/project/"));
+
+/**
+ * Navigation content shared by the desktop rail and the mobile drawer.
+ * `mobile` renders the drawer variant (always expanded, with a close button).
+ */
+export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, onClose }) => {
     const location = useLocation();
     const { user, logout } = useStore();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const collapsed = !mobile && isCollapsed;
 
     const isAdmin = user?.role?.roleName === 'Admin';
     const isManager = user?.role?.roleName === 'Project Manager';
 
+    // Mirror the route guards in App.jsx so we never link to a page that bounces the user.
     const filteredMenuItems = menuItems.filter(item => {
+        if (item.path === '/dashboard' && !user?.role?.viewReports) return false;
         if (item.path === '/tasks' && isAdmin) return false;
-        if (item.path === '/activity' && !isAdmin && !isManager) return false;
+        if (item.path === '/activity' && (!user?.role?.viewReports || (!isAdmin && !isManager))) return false;
         return true;
     });
 
@@ -32,128 +46,124 @@ export const Sidebar = ({ isCollapsed, toggleSidebar }) => {
 
     return (
         <>
-            {/*  FIX: Added dynamic width and transition */}
-            <aside className={`flex h-screen flex-col border-r border-gray-200/60 bg-gray-50/50 backdrop-blur-xl transition-[width] duration-300 ease-in-out ${isCollapsed ? "w-20" : "w-64"}`}>
-
+            <div className={cn("flex h-full flex-col", mobile ? "w-72 bg-white" : "w-full")}>
                 {/* Logo Section */}
-                <div className={`flex h-16 shrink-0 items-center ${isCollapsed ? "justify-center" : "justify-between px-6"}`}>
-                    <div className={`flex items-center gap-2 ${isCollapsed ? "hidden" : "flex"}`}>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm">
-                            <div className="h-3 w-3 rounded-full bg-gray-900" />
-                        </div>
-                        <span className="text-lg font-bold tracking-tight text-gray-900 truncate">TeamPulse</span>
-                    </div>
+                <div className={cn("flex h-16 shrink-0 items-center", collapsed ? "justify-center" : "justify-between pl-5 pr-3")}>
+                    {!collapsed && (
+                        <Link to={user?.role?.viewReports ? "/dashboard" : "/projects"} onClick={onClose} className="flex items-center gap-2.5 rounded-lg">
+                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900">
+                                <span className="h-2.5 w-2.5 rounded-full bg-white" />
+                            </span>
+                            <span className="text-[17px] font-semibold tracking-tight text-gray-900">TeamPulse</span>
+                        </Link>
+                    )}
 
-                    {/*  NEW: The Collapse/Expand Button */}
-                    <button
-                        onClick={toggleSidebar}
-                        className={`text-gray-500 hover:text-gray-900 transition-colors ${isCollapsed ? "mt-2" : ""}`}
-                        title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-                    >
-                        {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-                    </button>
+                    {mobile ? (
+                        <button onClick={onClose} className={btn.icon} aria-label="Close navigation">
+                            <X size={20} />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={toggleSidebar}
+                            className={btn.icon}
+                            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                            aria-expanded={!collapsed}
+                            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        >
+                            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+                        </button>
+                    )}
                 </div>
 
                 {/* Navigation Menu */}
-                <nav className="flex-1 space-y-1 px-3 py-4 overflow-x-hidden overflow-y-auto">
-                    {!isCollapsed && <div className="mb-4 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Menu</div>}
-
-                    {filteredMenuItems.map((item) => {
-                        const isActive = location.pathname === item.path;
-                        return (
-                            <Link key={item.path} to={item.path} className="block relative" title={isCollapsed ? item.label : ""}>
-                                {isActive && (
-                                    <div
-                                       
-                                        className="absolute inset-0 rounded-lg bg-gray-100 border border-gray-200"
-                                       
-                                    />
-                                )}
-                                <div className={`relative z-10 flex items-center rounded-lg px-3 py-2 transition-colors ${isActive ? "text-gray-900 font-medium" : "text-gray-500 hover:text-gray-800 hover:bg-white border-gray-200 font-medium"} ${isCollapsed ? "justify-center" : "justify-start"}`}>
-                                    <div className="flex items-center gap-3">
-                                        <item.icon size={18} className={isActive ? "text-gray-900 shrink-0" : "text-gray-400 shrink-0"} />
-                                        {/*  FIX: Hide label when collapsed */}
-                                        {!isCollapsed && <span className="text-sm whitespace-nowrap">{item.label}</span>}
-                                    </div>
-                                </div>
-                            </Link>
-                        );
-                    })}
+                <nav aria-label="Main" className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+                    <ul className="space-y-0.5">
+                        {filteredMenuItems.map((item) => {
+                            const isActive = isActivePath(location.pathname, item.path);
+                            return (
+                                <li key={item.path}>
+                                    <Link
+                                        to={item.path}
+                                        onClick={onClose}
+                                        aria-current={isActive ? "page" : undefined}
+                                        title={collapsed ? item.label : undefined}
+                                        className={cn(
+                                            "flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+                                            collapsed && "justify-center px-0",
+                                            isActive
+                                                ? "bg-white text-gray-900 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-gray-200"
+                                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                                        )}
+                                    >
+                                        <item.icon size={18} aria-hidden="true" className={cn("shrink-0", isActive ? "text-indigo-600" : "text-gray-500")} />
+                                        <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 </nav>
 
                 {/* Bottom User Profile & Settings Section */}
-                <div className="shrink-0 border-t border-gray-200/60 p-4 flex flex-col items-center">
-                    <Link to="/settings" className={`group flex items-center gap-3 rounded-xl p-2 transition-all hover:bg-white cursor-pointer ${isCollapsed ? "justify-center w-full" : "w-full"}`} title="Settings">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 border border-gray-200 text-gray-700 overflow-hidden">
-                            {user?.profilePicture ? (
-                                <img src={user.profilePicture} alt={user.fullName} className="h-full w-full object-cover" />
-                            ) : (
-                                user?.fullName?.charAt(0).toUpperCase() || 'U'
-                            )}
-                        </div>
-
-                        {!isCollapsed && (
+                <div className="shrink-0 space-y-1 border-t border-gray-200 p-3">
+                    <Link
+                        to="/settings"
+                        onClick={onClose}
+                        aria-current={location.pathname === "/settings" ? "page" : undefined}
+                        className={cn(
+                            "group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-gray-100",
+                            collapsed && "justify-center",
+                            location.pathname === "/settings" && "bg-white ring-1 ring-gray-200"
+                        )}
+                        title="Account settings"
+                    >
+                        <Avatar name={user?.fullName} src={user?.profilePicture} size="lg" />
+                        {!collapsed && (
                             <>
-                                <div className="flex flex-1 flex-col overflow-hidden">
-                                    <span className="truncate text-sm font-semibold text-gray-800 group-hover:text-gray-900 transition-colors">{user?.fullName}</span>
-                                    <span className="truncate text-xs text-gray-400">{user?.role?.roleName || 'Member'}</span>
-                                </div>
-                                <Settings size={16} className="text-gray-400 group-hover:text-gray-700 transition-colors shrink-0" />
+                                <span className="flex min-w-0 flex-1 flex-col">
+                                    <span className="truncate text-sm font-semibold text-gray-900">{user?.fullName}</span>
+                                    <span className="truncate text-xs text-gray-600">{user?.role?.roleName || 'Member'}</span>
+                                </span>
+                                <Settings size={16} aria-hidden="true" className="shrink-0 text-gray-500 transition-colors group-hover:text-gray-800" />
                             </>
                         )}
+                        {collapsed && <span className="sr-only">Account settings</span>}
                     </Link>
 
                     <button
                         onClick={() => setShowLogoutModal(true)}
-                        title="Log out"
-                        className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-400 hover:bg-red-500/10 hover:text-red-400 transition-colors ${isCollapsed ? "justify-center w-full" : "w-full"}`}
+                        title={collapsed ? "Log out" : undefined}
+                        className={cn(
+                            "flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-red-50 hover:text-red-700",
+                            collapsed && "justify-center px-0"
+                        )}
                     >
-                        <LogOut size={16} className="shrink-0" />
-                        {!isCollapsed && <span>Log out</span>}
+                        <LogOut size={16} aria-hidden="true" className="shrink-0" />
+                        <span className={collapsed ? "sr-only" : undefined}>Log out</span>
                     </button>
                 </div>
-            </aside>
+            </div>
 
-            {/* Logout Confirmation Modal */}
-            <>
-                {showLogoutModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-200/80 backdrop-blur-sm p-4">
-                        <div
-                           
-                           
-                           
-                            className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-2xl"
-                        >
-                            <div className="flex items-start gap-4">
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-400 mt-1">
-                                    <LogOut size={20} />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900">Log out of TeamPulse?</h3>
-                                    <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                                        Are you sure you want to log out? You will need to enter your credentials to access your dashboard again.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="mt-8 flex justify-end gap-3">
-                                <button
-                                    onClick={() => setShowLogoutModal(false)}
-                                    className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleConfirmLogout}
-                                    className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-gray-900 hover:bg-red-500 transition-colors shadow-lg shadow-red-500/20"
-                                >
-                                    Log out
-                                </button>
-                            </div>
+            {/* Logout Confirmation */}
+            <Dialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+                <DialogContent className="gap-0 p-6 sm:max-w-md">
+                    <div className="flex items-start gap-4">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+                            <LogOut size={18} aria-hidden="true" />
+                        </span>
+                        <div className="pr-6">
+                            <DialogTitle className="text-lg font-semibold leading-tight text-gray-900">Log out of TeamPulse?</DialogTitle>
+                            <DialogDescription className="mt-2 text-sm leading-relaxed text-gray-600">
+                                You'll need your email and password to get back into your workspace.
+                            </DialogDescription>
                         </div>
                     </div>
-                )}
-            </>
+                    <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <button onClick={() => setShowLogoutModal(false)} className={btn.ghost}>Cancel</button>
+                        <button onClick={handleConfirmLogout} className={btn.danger} autoFocus>Log out</button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </>
     );
 };
