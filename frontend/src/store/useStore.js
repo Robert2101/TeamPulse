@@ -28,9 +28,15 @@ export const useStore = create((set) => ({
         set({ user: res.data.user });
     },
 
+    // Always clear the local session, even if the network call fails, so the user is never stuck "logged in".
     logout: async () => {
-        await axios.post('/auth/logout');
-        set({ user: null, projects: [], projectsLoaded: false });
+        try {
+            await axios.post('/auth/logout');
+        } catch (error) {
+            console.error("Logout request failed", error);
+        } finally {
+            set({ user: null, projects: [], projectsLoaded: false });
+        }
     },
 
     setProjects: (projects) => set({ projects, projectsLoaded: true }),

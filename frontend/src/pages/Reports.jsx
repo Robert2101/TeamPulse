@@ -1,45 +1,105 @@
 import { useEffect, useState } from "react";
-import {
-    BarChart3,
-    CheckCircle,
-    AlertCircle,
-    Flame,
-    Target,
-    Briefcase,
-    Clock,
-    ChevronRight,
-} from "lucide-react";
+import { AlertCircle, Calendar, ChevronRight } from "lucide-react";
 import api from "../lib/axios";
 import { useStore } from "../store/useStore";
 import { Link } from "react-router-dom";
+import { PriorityBadge, ProjectStatusBadge, TaskStatusBadge } from "../components/ui/badges";
+import { TASK_STATUS_DOT } from "../lib/taskMeta";
+import { formatDate, isOverdue, firstName } from "../lib/format";
+import { card } from "../lib/styles";
+import { cn } from "../lib/utils";
+
+// Workflow stages, in board order. Colors validated with the dataviz palette checker (all checks pass).
+const STAGES = [
+    { key: "todo", label: "To-Do" },
+    { key: "inProgress", label: "In-Progress" },
+    { key: "review", label: "Review" },
+    { key: "done", label: "Done" },
+];
+
+const Stat = ({ label, value, tone }) => (
+    <div className="min-w-0 px-5 py-4">
+        <dt className="truncate text-sm text-gray-600">{label}</dt>
+        <dd className={cn("tabular mt-1 text-3xl font-semibold tracking-tight", tone === "alert" && value > 0 ? "text-red-700" : "text-gray-900")}>{value}</dd>
+    </div>
+);
+
+const StatStrip = ({ children }) => (
+    <dl className={cn(card, "grid grid-cols-2 divide-gray-200 lg:grid-cols-4 [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(n+3)]:border-t-0 [&>*:nth-child(even)]:border-l lg:[&>*:not(:first-child)]:border-l")}>
+        {children}
+    </dl>
+);
+
+const WorkflowBar = ({ stats }) => {
+    const total = STAGES.reduce((sum, s) => sum + (stats[s.key] || 0), 0);
+    return (
+        <section className={cn(card, "p-5")} aria-labelledby="workflow-heading">
+            <div className="flex items-baseline justify-between gap-4">
+                <h2 id="workflow-heading" className="text-base font-semibold text-gray-900">Where work stands</h2>
+                <span className="tabular text-sm text-gray-600">{total} task{total === 1 ? "" : "s"}</span>
+            </div>
+            {total === 0 ? (
+                <p className="mt-4 text-sm text-gray-600">No tasks yet. Once projects have tasks, their progress shows here.</p>
+            ) : (
+                <>
+                    <div className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded" role="img" aria-label={STAGES.map(s => `${s.label}: ${stats[s.key] || 0}`).join(", ")}>
+                        {STAGES.map((s) => {
+                            const count = stats[s.key] || 0;
+                            if (!count) return null;
+                            return (
+                                <div
+                                    key={s.key}
+                                    className={cn("h-full first:rounded-l last:rounded-r transition-opacity hover:opacity-80", TASK_STATUS_DOT[s.label])}
+                                    style={{ width: `${(count / total) * 100}%` }}
+                                    title={`${s.label}: ${count} (${Math.round((count / total) * 100)}%)`}
+                                />
+                            );
+                        })}
+                    </div>
+                    <ul className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+                        {STAGES.map((s) => {
+                            const count = stats[s.key] || 0;
+                            return (
+                                <li key={s.key} className="flex items-center gap-2 text-sm">
+                                    <span className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", TASK_STATUS_DOT[s.label])} aria-hidden="true" />
+                                    <span className="text-gray-700">{s.label}</span>
+                                    <span className="tabular ml-auto font-medium text-gray-900 sm:ml-0">{count}</span>
+                                    <span className="tabular text-gray-500">{Math.round((count / total) * 100)}%</span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </>
+            )}
+        </section>
+    );
+};
+
+const PageHeader = ({ title, subtitle }) => (
+    <div className="border-b border-gray-200 pb-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{title}</h1>
+        <p className="mt-2 text-gray-600">{subtitle}</p>
+    </div>
+);
 
 export const Reports = () => {
-    const { projects, user } = useStore();
+    const { projects, projectsLoaded, user } = useStore();
     const isAdmin = user?.role?.roleName === "Admin";
 
     // Global Stats (For Admin)
-    const [globalStats, setGlobalStats] = useState({
-        todo: 0,
-        inProgress: 0,
-        review: 0,
-        done: 0,
-        total: 0,
-        urgent: 0,
-    });
-
+    const [globalStats, setGlobalStats] = useState({ todo: 0, inProgress: 0, review: 0, done: 0, total: 0, urgent: 0 });
     // Personal Stats (For Members)
     const [myTasks, setMyTasks] = useState([]);
-
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
 
     useEffect(() => {
+        if (isAdmin && !projectsLoaded) return;
         const fetchDashboardData = async () => {
+            setError(false);
             try {
                 if (isAdmin) {
-                    if (projects.length === 0) {
-                        setLoading(false);
-                        return;
-                    }
+                    if (projects.length === 0) return;
                     // ADMIN COMMAND CENTER LOGIC: Use single workspace aggregate stats endpoint (cached in Redis)
                     const res = await api.get('/tasks/stats');
                     setGlobalStats(res.data);
@@ -50,321 +110,170 @@ export const Reports = () => {
                 }
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
+                setError(true);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchDashboardData();
-    }, [projects, isAdmin, user]);
+    }, [projects.length, projectsLoaded, isAdmin]);
 
     if (loading) {
         return (
-            <div className="flex h-[60vh] items-center justify-center">
-                <div className="animate-pulse flex flex-col items-center gap-3 text-gray-400">
-                    <Target size={32} className="animate-spin-slow" />
-                    <p>Loading your workspace...</p>
-                </div>
+            <div className="mx-auto max-w-7xl animate-pulse space-y-8" role="status" aria-label="Loading overview">
+                <div className="h-8 w-56 rounded bg-gray-200" />
+                <div className="h-24 rounded-2xl bg-gray-100" />
+                <div className="h-28 rounded-2xl bg-gray-100" />
+                <div className="h-64 rounded-2xl bg-gray-100" />
             </div>
         );
     }
 
+    const errorBanner = error && (
+        <p role="alert" className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <AlertCircle size={16} aria-hidden="true" /> Some numbers couldn't be loaded and may be out of date. Refresh to try again.
+        </p>
+    );
+
     // ==========================================
-    // 👑 GOD MODE: ADMIN COMMAND CENTER
+    // ADMIN COMMAND CENTER
     // ==========================================
     if (isAdmin) {
         return (
-            <div className="max-w-7xl mx-auto space-y-8 pb-12">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 pb-6">
-                    <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-700 border border-gray-200">
-                                <BarChart3 size={18} />
-                            </span>
-                            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-                                System Overview
-                            </h2>
-                        </div>
-                        <p className="text-gray-500">
-                            Global organization analytics, active projects,
-                            and system health.
-                        </p>
-                    </div>
-                </div>
+            <div className="mx-auto max-w-7xl space-y-6 pb-12">
+                <PageHeader title="Workspace overview" subtitle="Task progress and every project across your organization." />
+                {errorBanner}
 
-                {/* Admin KPI Grid */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md">
-                        <div className="flex justify-between items-start">
-                            <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                                Total Projects
-                            </span>
-                            <div className="rounded-md bg-gray-100 p-2 text-gray-700 border border-gray-200">
-                                <Briefcase size={18} />
-                            </div>
-                        </div>
-                        <span className="text-4xl font-black mt-4 block text-gray-900">
-                            {projects.length}
-                        </span>
+                <StatStrip>
+                    <Stat label="Projects" value={projects.length} />
+                    <Stat label="Tasks" value={globalStats.total} />
+                    <Stat label="Completed" value={globalStats.done} />
+                    <Stat label="Urgent and open" value={globalStats.urgent} tone="alert" />
+                </StatStrip>
+
+                <WorkflowBar stats={globalStats} />
+
+                {/* Admin project directory */}
+                <section className={cn(card, "overflow-hidden")} aria-labelledby="directory-heading">
+                    <div className="flex items-center justify-between border-b border-gray-200 p-5">
+                        <h2 id="directory-heading" className="text-base font-semibold text-gray-900">Project directory</h2>
+                        <Link to="/projects" className="text-sm font-medium text-indigo-700 hover:underline">View as cards</Link>
                     </div>
 
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md">
-                        <div className="flex justify-between items-start">
-                            <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                                Global Tasks
-                            </span>
-                            <div className="rounded-md bg-gray-100 p-2 text-gray-700 border border-gray-200">
-                                <Target size={18} />
-                            </div>
-                        </div>
-                        <span className="text-4xl font-black mt-4 block text-gray-900">
-                            {globalStats.total}
-                        </span>
-                    </div>
-
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md">
-                        <div className="flex justify-between items-start">
-                            <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                                Completed
-                            </span>
-                            <div className="rounded-md bg-gray-100 p-2 text-gray-700 border border-gray-200">
-                                <CheckCircle size={18} />
-                            </div>
-                        </div>
-                        <span className="text-4xl font-black mt-4 block text-gray-900">
-                            {globalStats.done}
-                        </span>
-                    </div>
-
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md">
-                        <div className="flex justify-between items-start">
-                            <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                                Global Blockers
-                            </span>
-                            <div className="rounded-md bg-red-500/10 p-2 text-red-500 border border-red-500/20">
-                                <Flame size={18} />
-                            </div>
-                        </div>
-                        <span className="text-4xl font-black mt-4 block text-red-500">
-                            {globalStats.urgent}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Admin Data Table */}
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 shadow-xl overflow-hidden">
-                    <div className="border-b border-gray-200 bg-white p-5">
-                        <h3 className="text-lg font-bold text-gray-900">
-                            Active Project Directory
-                        </h3>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-gray-500">
-                            <thead className="bg-white shadow-sm text-xs uppercase text-gray-400">
-                                <tr>
-                                    <th className="px-6 py-4 font-semibold">
-                                        Project Name
-                                    </th>
-                                    <th className="px-6 py-4 font-semibold">
-                                        Manager
-                                    </th>
-                                    <th className="px-6 py-4 font-semibold">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-4 font-semibold">
-                                        Priority
-                                    </th>
-                                    <th className="px-6 py-4 font-semibold text-right">
-                                        Action
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody className="divide-y divide-gray-200">
-                                {projects.length === 0 ? (
+                    {projects.length === 0 ? (
+                        <p className="p-8 text-center text-sm text-gray-600">No projects in this workspace yet.</p>
+                    ) : (
+                        <div className="relative overflow-x-auto">
+                            <table className="w-full min-w-160 text-left text-sm text-gray-700">
+                                <thead className="bg-gray-50 text-xs text-gray-600">
                                     <tr>
-                                        <td
-                                            colSpan={5}
-                                            className="text-center py-8"
-                                        >
-                                            No projects in the system.
-                                        </td>
+                                        <th scope="col" className="px-5 py-3 font-medium">Project</th>
+                                        <th scope="col" className="px-5 py-3 font-medium">Manager</th>
+                                        <th scope="col" className="px-5 py-3 font-medium">Status</th>
+                                        <th scope="col" className="px-5 py-3 font-medium">Priority</th>
+                                        <th scope="col" className="px-5 py-3"><span className="sr-only">Open</span></th>
                                     </tr>
-                                ) : (
-                                    projects.map((p) => (
-                                        <tr
-                                            key={p._id}
-                                            className="hover:bg-white transition-colors"
-                                        >
-                                            <td className="px-6 py-4 font-medium text-gray-800">
-                                                {p.projectName}
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {projects.map((p) => (
+                                        <tr key={p._id} className="transition-colors hover:bg-gray-50">
+                                            <td className="max-w-88 px-5 py-3.5">
+                                                <Link to={`/project/${p._id}`} className="line-clamp-2 font-medium text-gray-900 wrap-anywhere hover:underline">{p.projectName}</Link>
                                             </td>
-
-                                            <td className="px-6 py-4">
-                                                {p.projectManager?.fullName ||
-                                                    "Unassigned"}
-                                            </td>
-
-                                            <td className="px-6 py-4">
-                                                <span
-                                                    className={`rounded-full border px-2 py-0.5 text-[10px] uppercase font-bold ${
-                                                        p.projectStatus === "Completed"
-                                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                                            : "bg-gray-100 text-gray-700 border-gray-200"
-                                                    }`}
-                                                >
-                                                    {p.projectStatus}
-                                                </span>
-                                            </td>
-
-                                            <td className="px-6 py-4">
-                                                {p.priority}
-                                            </td>
-
-                                            <td className="px-6 py-4 text-right">
-                                                <Link
-                                                    to={`/project/${p._id}`}
-                                                    className="text-gray-700 hover:text-gray-900 font-medium flex items-center justify-end gap-1"
-                                                >
-                                                    Inspect
-                                                    <ChevronRight size={14} />
+                                            <td className="whitespace-nowrap px-5 py-3.5">{p.projectManager?.fullName || "Unassigned"}</td>
+                                            <td className="px-5 py-3.5"><ProjectStatusBadge status={p.projectStatus} /></td>
+                                            <td className="px-5 py-3.5"><PriorityBadge priority={p.priority} /></td>
+                                            <td className="px-5 py-3.5 text-right">
+                                                <Link to={`/project/${p._id}`} className="inline-flex items-center gap-1 rounded font-medium text-gray-700 hover:text-gray-900" aria-label={`Open ${p.projectName}`}>
+                                                    Open <ChevronRight size={14} aria-hidden="true" />
                                                 </Link>
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </section>
             </div>
         );
     }
 
     // ==========================================
-    // 🧑‍💻 PERSONAL DESK: TEAM MEMBER / PM VIEW
+    // PERSONAL DESK: TEAM MEMBER / PM VIEW
     // ==========================================
-
     const myTodo = myTasks.filter((t) => t.taskStatus !== "Done");
     const myDone = myTasks.filter((t) => t.taskStatus === "Done");
-    const myUrgent = myTodo.filter(
-        (t) => t.priority === "Urgent" || t.priority === "High"
+    const myUrgent = myTodo.filter((t) => t.priority === "Urgent" || t.priority === "High");
+    const myOverdue = myTodo.filter((t) => isOverdue(t.dueDate, t.taskStatus));
+    // Overdue first, then urgency, then soonest due date.
+    const rank = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
+    const queue = [...myTodo].sort((a, b) =>
+        (isOverdue(b.dueDate, b.taskStatus) - isOverdue(a.dueDate, a.taskStatus)) ||
+        ((rank[a.priority] ?? 4) - (rank[b.priority] ?? 4)) ||
+        ((a.dueDate ? new Date(a.dueDate) : Infinity) - (b.dueDate ? new Date(b.dueDate) : Infinity))
     );
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 pb-12">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 pb-6">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-                        My Workspace
-                    </h2>
-                    <p className="mt-2 text-gray-500">
-                        Welcome back, {user?.fullName?.split(" ")[0]}. Here is
-                        what needs your attention.
-                    </p>
-                </div>
-            </div>
+        <div className="mx-auto max-w-6xl space-y-6 pb-12">
+            <PageHeader
+                title={`Welcome back${firstName(user?.fullName) ? `, ${firstName(user.fullName)}` : ""}`}
+                subtitle="Here's what needs your attention."
+            />
+            {errorBanner}
 
-            {/* Personal KPI Grid */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md border-t-4 border-t-gray-300">
-                    <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                        My Pending Tasks
-                    </span>
-                    <span className="text-4xl font-black mt-2 block text-gray-900">
-                        {myTodo.length}
-                    </span>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md border-t-4 border-t-gray-300">
-                    <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                        My Completed Tasks
-                    </span>
-                    <span className="text-4xl font-black mt-2 block text-gray-900">
-                        {myDone.length}
-                    </span>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-md border-t-4 border-t-gray-300">
-                    <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                        Urgent / High Priority
-                    </span>
-                    <span className="text-4xl font-black mt-2 block text-gray-900">
-                        {myUrgent.length}
-                    </span>
-                </div>
-            </div>
+            <StatStrip>
+                <Stat label="Open tasks" value={myTodo.length} />
+                <Stat label="Completed" value={myDone.length} />
+                <Stat label="High or urgent" value={myUrgent.length} />
+                <Stat label="Overdue" value={myOverdue.length} tone="alert" />
+            </StatStrip>
 
             {/* Priority Queue */}
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 shadow-xl overflow-hidden">
-                <div className="border-b border-gray-200 bg-white p-5 flex items-center gap-2">
-                    <AlertCircle size={18} className="text-gray-700" />
-                    <h3 className="text-lg font-bold text-gray-900">
-                        My Priority Queue
-                    </h3>
+            <section className={cn(card, "overflow-hidden")} aria-labelledby="queue-heading">
+                <div className="flex items-center justify-between border-b border-gray-200 p-5">
+                    <h2 id="queue-heading" className="text-base font-semibold text-gray-900">Up next</h2>
+                    {myTodo.length > 5 && <Link to="/tasks" className="text-sm font-medium text-indigo-700 hover:underline">All {myTodo.length} tasks</Link>}
                 </div>
 
-                <div className="p-2">
-                    {myTodo.length === 0 ? (
-                        <div className="p-10 text-center text-gray-400">
-                            You're all caught up! No pending tasks.
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-2 p-4">
-                            {myTodo.slice(0, 5).map((task) => (
-                                <Link
-                                    key={task._id}
-                                    to={`/project/${
-                                        task.projectReference?._id ||
-                                        task.projectReference
-                                    }`}
-                                    className="group flex items-center justify-between rounded-xl border border-gray-200/50 bg-white shadow-sm p-4 hover:border-gray-300 hover:bg-white transition-all"
-                                >
-                                    <div className="flex flex-col">
-                                        <div className="flex items-center gap-2">
-                                            <span
-                                                className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                                    task.priority === "Urgent"
-                                                        ? "bg-red-500/10 text-red-500"
-                                                        : "bg-gray-100 text-gray-700 border border-gray-200"
-                                                }`}
-                                            >
-                                                {task.priority}
-                                            </span>
-
-                                            <h4 className="font-semibold text-gray-800 group-hover:text-gray-900 transition-colors">
-                                                {task.taskName}
-                                            </h4>
+                {myTodo.length === 0 ? (
+                    <div className="p-10 text-center">
+                        <p className="font-medium text-gray-900">You're all caught up</p>
+                        <p className="mt-1 text-sm text-gray-600">No open tasks are assigned to you.</p>
+                    </div>
+                ) : (
+                    <ul className="divide-y divide-gray-100">
+                        {queue.slice(0, 5).map((task) => {
+                            const overdue = isOverdue(task.dueDate, task.taskStatus);
+                            return (
+                                <li key={task._id}>
+                                    <Link
+                                        to={`/project/${task.projectReference?._id || task.projectReference}`}
+                                        className="group flex flex-col gap-2 p-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                <PriorityBadge priority={task.priority} />
+                                                <h3 className="truncate font-medium text-gray-900">{task.taskName}</h3>
+                                            </div>
+                                            <p className={cn("mt-1 flex items-center gap-1.5 text-xs", overdue ? "font-medium text-red-700" : "text-gray-600")}>
+                                                <Calendar size={12} aria-hidden="true" />
+                                                {task.dueDate ? `${overdue ? "Overdue · " : "Due "}${formatDate(task.dueDate)}` : "No due date"}
+                                                {task.projectReference?.projectName && <span className="truncate text-gray-600">· {task.projectReference.projectName}</span>}
+                                            </p>
                                         </div>
-
-                                        <span className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                                            <Clock size={12} />
-                                            Due:{" "}
-                                            {task.dueDate
-                                                ? new Date(
-                                                      task.dueDate
-                                                  ).toLocaleDateString()
-                                                : "No date set"}
-                                        </span>
-                                    </div>
-
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-200">
-                                            {task.taskStatus}
-                                        </span>
-
-                                        <ChevronRight
-                                            size={16}
-                                            className="text-gray-400 group-hover:text-gray-700"
-                                        />
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
+                                        <div className="flex shrink-0 items-center gap-3">
+                                            <TaskStatusBadge status={task.taskStatus} />
+                                            <ChevronRight size={16} className="hidden text-gray-400 group-hover:text-gray-700 sm:block" aria-hidden="true" />
+                                        </div>
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </section>
         </div>
     );
 };

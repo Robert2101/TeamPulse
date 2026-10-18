@@ -1,107 +1,100 @@
 import { useState } from "react";
-import { Plus, Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Plus, Loader2, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useStore } from "../store/useStore";
+import { btn, field, label } from "../lib/styles";
+import { errorMessage } from "../lib/format";
+import { toast } from "../lib/toast";
+
+const EMPTY = { projectName: "", projectDescription: "", priority: "Medium", budget: "", projectType: "Software", startDate: "", endDate: "" };
 
 export const CreateProjectModal = ({ api }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const addProject = useStore((state) => state.addProject);
+    const { addProject, user } = useStore();
 
-    const [formData, setFormData] = useState({
-        projectName: "",
-        projectDescription: "",
-        priority: "Medium",
-        budget: "",
-        projectType: "Software",
-        startDate: "",
-        endDate: "",
-    });
+    const [formData, setFormData] = useState(EMPTY);
+    const update = (key) => (e) => setFormData({ ...formData, [key]: e.target.value });
+    const datesInvalid = formData.startDate && formData.endDate && formData.endDate < formData.startDate;
+
+    const handleOpenChange = (open) => {
+        setIsOpen(open);
+        if (!open) setError("");
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (datesInvalid) return;
         setLoading(true);
+        setError("");
         try {
-            const res = await api.post("/projects", formData);
-
-            addProject(res.data.project);
-
-            setIsOpen(false); 
-            setFormData({ projectName: "", projectDescription: "", priority: "Medium", budget: "", projectType: "Software", startDate: "", endDate: "" });
-        } catch (error) {
-            console.error("Failed to create project:", error);
+            const res = await api.post("/projects", { ...formData, projectName: formData.projectName.trim() });
+            const project = res.data.project;
+            // The create endpoint returns raw ids; hydrate the manager so the card shows a name right away.
+            if (project && typeof project.projectManager !== "object") {
+                project.projectManager = { _id: user._id, fullName: user.fullName, profilePicture: user.profilePicture };
+            }
+            addProject(project);
+            setIsOpen(false);
+            setFormData(EMPTY);
+            toast.success("Project created", project.projectName);
+        } catch (err) {
+            setError(errorMessage(err, "Couldn't create the project. Please try again."));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-                <button
-                   
-                   
-                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-500"
-                >
-                    <Plus size={18} />
-                    New Project
+                <button className={btn.primary}>
+                    <Plus size={18} aria-hidden="true" />
+                    New project
                 </button>
             </DialogTrigger>
 
-            <DialogContent className="border-gray-200 bg-gray-50/90 p-0 shadow-2xl backdrop-blur-2xl sm:max-w-125">
-                <div className="flex items-center justify-between border-b border-gray-200 p-6">
-                    <DialogTitle className="text-xl font-bold text-gray-900">Launch New Project</DialogTitle>
+            <DialogContent className="gap-0 p-0 sm:max-w-lg">
+                <div className="border-b border-gray-200 p-6 pr-14">
+                    <DialogTitle className="text-lg font-semibold text-gray-900">New project</DialogTitle>
+                    <DialogDescription className="mt-1 text-sm text-gray-600">You'll be the project manager. Add team members after it's created.</DialogDescription>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="projectName" className="text-gray-500">Project Name</Label>
-                        <Input
-                            id="projectName"
-                            required
-                            className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                            placeholder="e.g., Alpha Version Release"
-                            value={formData.projectName}
-                            onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
-                        />
+                <form onSubmit={handleSubmit} className="space-y-4 p-6">
+                    {error && (
+                        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                            <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
+                        </div>
+                    )}
+                    <div>
+                        <label htmlFor="projectName" className={label}>Project name</label>
+                        <input id="projectName" required maxLength={120} className={field} placeholder="e.g. Alpha release" value={formData.projectName} onChange={update("projectName")} />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="projectDescription" className="text-gray-500">Description</Label>
-                        <Textarea
+                    <div>
+                        <label htmlFor="projectDescription" className={label}>Description</label>
+                        <textarea
                             id="projectDescription"
                             required
-                            className="min-h-25 border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
+                            rows={3}
+                            maxLength={2000}
+                            className={`${field} h-auto min-h-24 py-2`}
                             placeholder="What is the main goal of this project?"
                             value={formData.projectDescription}
-                            onChange={(e) => setFormData({ ...formData, projectDescription: e.target.value })}
+                            onChange={update("projectDescription")}
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="budget" className="text-gray-500">Budget ($)</Label>
-                            <Input
-                                id="budget"
-                                type="number"
-                                required
-                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                placeholder="5000"
-                                value={formData.budget}
-                                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                            />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="budget" className={label}>Budget (USD)</label>
+                            <input id="budget" type="number" min={0} step="1" inputMode="numeric" required className={`${field} tabular`} placeholder="5000" value={formData.budget} onChange={update("budget")} />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="priority" className="text-gray-500">Priority</Label>
-                            <select
-                                className="flex h-10 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                value={formData.priority}
-                                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                            >
+                        <div>
+                            <label htmlFor="priority" className={label}>Priority</label>
+                            <select id="priority" className={field} value={formData.priority} onChange={update("priority")}>
                                 <option value="Low">Low</option>
                                 <option value="Medium">Medium</option>
                                 <option value="High">High</option>
@@ -110,43 +103,31 @@ export const CreateProjectModal = ({ api }) => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="startDate" className="text-gray-500">Start Date</Label>
-                            <Input
-                                id="startDate"
-                                type="date"
-                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                value={formData.startDate}
-                                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                            />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="startDate" className={label}>Start date</label>
+                            <input id="startDate" type="date" className={field} value={formData.startDate} onChange={update("startDate")} />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="endDate" className="text-gray-500">End Date</Label>
-                            <Input
+                        <div>
+                            <label htmlFor="endDate" className={label}>End date</label>
+                            <input
                                 id="endDate"
                                 type="date"
-                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
+                                min={formData.startDate || undefined}
+                                aria-invalid={datesInvalid || undefined}
+                                aria-describedby={datesInvalid ? "endDate-error" : undefined}
+                                className={field}
                                 value={formData.endDate}
-                                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                onChange={update("endDate")}
                             />
+                            {datesInvalid && <p id="endDate-error" className="mt-1.5 text-xs text-red-700">End date must be on or after the start date.</p>}
                         </div>
                     </div>
 
-                    <div className="mt-6 flex justify-end gap-3 border-t border-gray-200 pt-6">
-                        <button
-                            type="button"
-                            onClick={() => setIsOpen(false)}
-                            className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-indigo-500 disabled:opacity-50"
-                        >
-                            {loading ? <Loader2 className="animate-spin" size={18} /> : "Create Project"}
+                    <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-5 sm:flex-row sm:justify-end">
+                        <button type="button" onClick={() => handleOpenChange(false)} className={btn.ghost}>Cancel</button>
+                        <button type="submit" disabled={loading || datesInvalid} className={btn.primary}>
+                            {loading ? <><Loader2 className="animate-spin" size={16} aria-hidden="true" /> Creating…</> : "Create project"}
                         </button>
                     </div>
                 </form>
