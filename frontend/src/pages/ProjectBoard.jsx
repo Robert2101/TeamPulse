@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Calendar, Lock, RotateCw } from "lucide-react";
 
@@ -17,6 +17,7 @@ import { formatDate, isOverdue, errorMessage } from "../lib/format";
 import { toast } from "../lib/toast";
 import { btn } from "../lib/styles";
 import { cn } from "../lib/utils";
+import { gsap, Flip, prefersReducedMotion } from "../lib/motion";
 
 const COLUMNS = ["To-Do", "In-Progress", "Review", "Done"];
 const idOf = (v) => (v && typeof v === "object" ? v._id : v)?.toString();
@@ -45,6 +46,30 @@ export const ProjectBoard = () => {
     const [selectedTaskId, setSelectedTaskId] = useState(null);
     const [activeTab, setActiveTab] = useState("kanban"); // "kanban" | "assets"
     const [dragOverColumn, setDragOverColumn] = useState(null);
+
+    // FLIP: snapshot card positions right before tasks change, then animate from there after React re-renders.
+    const boardRef = useRef(null);
+    const flipStateRef = useRef(null);
+    const tasksRef = useRef(tasks);
+    useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+    const captureLayout = useCallback(() => {
+        if (!boardRef.current || prefersReducedMotion()) return;
+        flipStateRef.current = Flip.getState(boardRef.current.querySelectorAll("[data-flip-id]"));
+    }, []);
+
+    useLayoutEffect(() => {
+        const state = flipStateRef.current;
+        if (!state || !boardRef.current) return;
+        flipStateRef.current = null;
+        Flip.from(state, {
+            targets: boardRef.current.querySelectorAll("[data-flip-id]"),
+            duration: 0.45,
+            ease: "power3.inOut",
+            scale: false,
+            onEnter: (els) => gsap.fromTo(els, { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }),
+        });
+    }, [tasks]);
 
     const fetchBoardData = useCallback(async () => {
         setLoading(true);
@@ -80,11 +105,17 @@ export const ProjectBoard = () => {
     useEffect(() => {
         if (!socket) return;
 
-        const onUpdated = (updatedTask) => mergeTask(updatedTask);
+        const onUpdated = (updatedTask) => {
+            const current = tasksRef.current.find(t => t._id === updatedTask._id);
+            if (current && current.taskStatus !== updatedTask.taskStatus) captureLayout();
+            mergeTask(updatedTask);
+        };
         const onCreated = (newTask) => {
+            if (!tasksRef.current.some(t => t._id === newTask._id)) captureLayout();
             setTasks(prev => (prev.some(t => t._id === newTask._id) ? prev : [newTask, ...prev]));
         };
         const onDeleted = ({ taskId }) => {
+            if (tasksRef.current.some(t => t._id === taskId)) captureLayout();
             setTasks(prev => prev.filter(t => t._id !== taskId));
             setSelectedTaskId(prev => (prev === taskId ? null : prev));
         };
@@ -98,7 +129,7 @@ export const ProjectBoard = () => {
             socket.off("task-created", onCreated);
             socket.off("task-deleted", onDeleted);
         };
-    }, [socket, mergeTask]);
+    }, [socket, mergeTask, captureLayout]);
 
     // --- FRONTEND RBAC (mirrors backend checks) ---
     const isAdmin = user?.role?.roleName === 'Admin';
@@ -112,6 +143,7 @@ export const ProjectBoard = () => {
 
     const changeStatus = useCallback(async (taskId, newStatus) => {
         let previous;
+        captureLayout();
         setTasks(prev => {
             previous = prev.find(t => t._id === taskId);
             return prev.map(t => (t._id === taskId ? { ...t, taskStatus: newStatus } : t));
@@ -120,10 +152,13 @@ export const ProjectBoard = () => {
             const res = await api.patch(`/tasks/${taskId}`, { taskStatus: newStatus });
             if (res.data?.task) mergeTask(res.data.task);
         } catch (error) {
-            if (previous) setTasks(prev => prev.map(t => (t._id === taskId ? previous : t)));
+            if (previous) {
+                captureLayout();
+                setTasks(prev => prev.map(t => (t._id === taskId ? previous : t)));
+            }
             toast.error("Couldn't move the task", errorMessage(error));
         }
-    }, [mergeTask]);
+    }, [mergeTask, captureLayout]);
 
     const handleDragStart = (e, taskId) => {
         e.dataTransfer.setData("taskId", taskId);
@@ -208,7 +243,7 @@ export const ProjectBoard = () => {
                         <CreateTaskModal
                             api={api}
                             project={project}
-                            onTaskCreated={(newTask) => setTasks(prev => (prev.some(t => t._id === newTask._id) ? prev : [newTask, ...prev]))}
+                            onTaskCreated={(newTask) => { captureLayout(); setTasks(prev => (prev.some(t => t._id === newTask._id) ? prev : [newTask, ...prev])); }}
                         />
                     )}
                 </div>
@@ -242,7 +277,7 @@ export const ProjectBoard = () => {
             {activeTab === "assets" ? (
                 <AssetsHub project={project} socket={socket} />
             ) : (
-                <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 md:mx-0 md:snap-none md:px-0">
+                <div ref={boardRef} className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 md:mx-0 md:snap-none md:px-0">
                     {COLUMNS.map((status) => {
                         const columnTasks = tasks.filter(task => task.taskStatus === status);
                         const isTarget = dragOverColumn === status;
@@ -276,6 +311,7 @@ export const ProjectBoard = () => {
                                         return (
                                             <li
                                                 key={task._id}
+                                                data-flip-id={task._id}
                                                 draggable={canMoveTasks}
                                                 onDragStart={canMoveTasks ? (e) => handleDragStart(e, task._id) : undefined}
                                                 onDragEnd={handleDragEnd}
@@ -330,7 +366,7 @@ export const ProjectBoard = () => {
                     canMoveTasks={canMoveTasks}
                     onStatusChange={(status) => changeStatus(selectedTask._id, status)}
                     onTaskUpdated={mergeTask}
-                    onTaskDeleted={(taskId) => { setTasks(prev => prev.filter(t => t._id !== taskId)); setSelectedTaskId(null); }}
+                    onTaskDeleted={(taskId) => { captureLayout(); setTasks(prev => prev.filter(t => t._id !== taskId)); setSelectedTaskId(null); }}
                 />
             )}
         </div>
