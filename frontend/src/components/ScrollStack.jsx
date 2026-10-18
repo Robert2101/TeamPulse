@@ -295,15 +295,15 @@ const ScrollStack = ({
           will-change: scroll-position;
         }
         .scroll-stack-inner {
-          padding: 10vh 2rem 50vh; /* Reduced padding for cleaner look */
-          min-height: 100vh;
+          padding: 10vh 1rem 50vh;
+          min-height: 100dvh;
         }
         .scroll-stack-card {
           transform-origin: top center;
           will-change: transform, filter;
           backface-visibility: hidden;
           transform-style: preserve-3d;
-          box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+          box-shadow: 0 24px 48px -16px rgba(15, 23, 42, 0.22), 0 2px 6px rgba(15, 23, 42, 0.05);
           height: 24rem;
           width: 100%;
           max-width: 800px;
@@ -313,8 +313,7 @@ const ScrollStack = ({
           -webkit-transform: translateZ(0);
           transform: translateZ(0);
           position: relative;
-          border: 1px solid rgba(255,255,255,0.1);
-        }
+                  }
         .scroll-stack-end {
           width: 100%;
           height: 1px;

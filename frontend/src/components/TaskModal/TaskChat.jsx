@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageSquare, Send, Edit2, Trash2, AlertTriangle, X } from "lucide-react";
+import { MessageSquare, Send, Edit2, Trash2, AlertTriangle, X, Paperclip } from "lucide-react";
 import api from "../../lib/axios";
 import { FileDropZone } from "../files/FileDropZone";
+import { Avatar } from "../ui/avatar";
+import { relativeTime } from "../../lib/format";
 
 export const TaskChat = ({ task, project, socket, user }) => {
     const [comments, setComments] = useState([]);
@@ -30,8 +32,10 @@ export const TaskChat = ({ task, project, socket, user }) => {
         };
     }, []);
 
+    // Scroll only the message list; scrollIntoView would also scroll the stacked panel on small screens.
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        const list = messagesEndRef.current?.parentElement;
+        if (list) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
     };
 
     useEffect(() => {
@@ -248,105 +252,118 @@ export const TaskChat = ({ task, project, socket, user }) => {
         }
     };
 
+    const isAdminUser = user?.role?.roleName === 'Admin';
+    const actionBtn = "inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100";
+    // Visible on hover/focus for pointer devices, always visible on touch screens.
+    const actionsReveal = "flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100";
+
     return (
         <div className="flex h-full w-full flex-col bg-transparent">
-            <div className="border-b border-gray-200/50 px-6 py-4 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-500">
-                    <MessageSquare size={14} className="text-gray-700" /> Team Discussion
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <MessageSquare size={16} className="text-gray-500" aria-hidden="true" /> Discussion
+                    {comments.length > 0 && <span className="tabular font-normal text-gray-500">({comments.length})</span>}
                 </h3>
             </div>
 
             {/* BUG #15 FIX: Inline error banner visible to the user */}
             {error && (
-                <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-                    <AlertTriangle size={14} className="shrink-0 text-red-400" />
-                    <span className="flex-1 text-xs text-red-300">{error}</span>
-                    <button onClick={() => setError(null)} className="text-red-400 hover:text-red-200">
+                <div role="alert" className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                    <AlertTriangle size={14} className="shrink-0 text-red-600" aria-hidden="true" />
+                    <span className="flex-1 text-sm text-red-800">{error}</span>
+                    <button onClick={() => setError(null)} className="rounded p-1 text-red-700 hover:bg-red-100" aria-label="Dismiss error">
                         <X size={13} />
                     </button>
                 </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite" aria-relevant="additions">
                 {loading ? (
-                    <div className="animate-pulse text-gray-400">Loading discussion...</div>
+                    <div className="space-y-4" role="status" aria-label="Loading discussion">
+                        {[0, 1, 2].map((i) => (
+                            <div key={i} className={`flex animate-pulse items-end gap-2 ${i % 2 ? "justify-end" : ""}`}>
+                                {i % 2 === 0 && <div className="h-7 w-7 rounded-full bg-gray-200" />}
+                                <div className="h-12 w-1/2 rounded-2xl bg-gray-100" />
+                            </div>
+                        ))}
+                    </div>
                 ) : comments.length === 0 ? (
-                    <div className="text-center text-sm text-gray-400 mt-10">No comments yet. Start the conversation!</div>
+                    <div className="mt-10 text-center">
+                        <p className="text-sm font-medium text-gray-900">No comments yet</p>
+                        <p className="mt-1 text-sm text-gray-600">Ask a question or share an update. Everyone on the project sees it live.</p>
+                    </div>
                 ) : (
                     comments.map(c => {
                         const authorId = typeof c.author === 'object' ? c.author?._id : c.author;
                         // BUG #13 alignment: use toString() for reliable ObjectId comparison
                         const isMe = authorId?.toString() === user?._id?.toString();
-                        const isAdminUser = user?.role?.roleName === 'Admin';
-                        // BUG #9 FIX: canModify correctly restricts buttons to author or Admin only.
-                        const canModify = isMe || isAdminUser;
                         const authorName = isMe ? user?.fullName : (c.author?.fullName || "Team Member");
-                        const isTemp = c._id.startsWith('temp-');
+                        const isTemp = String(c._id).startsWith('temp-');
+                        const image = c.attachments?.[0]?.url && c.attachments[0]?.fileType?.startsWith('image/') ? c.attachments[0] : null;
 
                         return (
-                            <div key={c._id} className={`group flex flex-col ${isMe ? "items-end" : "items-start"} mb-4`}>
-                                <span className={`mb-1 text-[10px] text-gray-400 flex items-center gap-1 ${isMe ? "mr-9" : "ml-9"}`}>
-                                    {authorName} {c.edited && "(edited)"}
+                            <div key={c._id} className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                                <span className={`mb-1 flex items-center gap-1.5 text-xs text-gray-600 ${isMe ? "mr-9" : "ml-9"}`}>
+                                    <span className="font-medium text-gray-800">{isMe ? "You" : authorName}</span>
+                                    {c.createdAt && <span>· {relativeTime(c.createdAt)}</span>}
+                                    {c.edited && <span>· edited</span>}
+                                    {isTemp && <span>· sending…</span>}
                                 </span>
 
                                 {editingCommentId === c._id ? (
                                     <div className="flex w-full max-w-[85%] flex-col gap-2">
+                                        <label htmlFor={`edit-${c._id}`} className="sr-only">Edit comment</label>
                                         <input
+                                            id={`edit-${c._id}`}
                                             autoFocus
                                             value={editContent}
                                             onChange={(e) => setEditContent(e.target.value)}
-                                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") { e.preventDefault(); handleEditSubmit(c._id); }
+                                                if (e.key === "Escape") { e.preventDefault(); setEditingCommentId(null); }
+                                            }}
+                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-3 focus:ring-indigo-500/20 sm:text-sm"
                                         />
-                                        <div className={`flex gap-3 ${isMe ? "justify-end" : "justify-start"}`}>
-                                            <button onClick={() => setEditingCommentId(null)} className="text-[11px] font-medium text-gray-500 hover:text-gray-800">Cancel</button>
-                                            <button onClick={() => handleEditSubmit(c._id)} className="text-[11px] font-bold text-gray-700 hover:text-gray-900">Save</button>
+                                        <div className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}>
+                                            <button onClick={() => setEditingCommentId(null)} className="rounded-md px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900">Cancel</button>
+                                            <button onClick={() => handleEditSubmit(c._id)} disabled={!editContent.trim()} className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">Save</button>
                                         </div>
                                     </div>
                                 ) : commentToDelete === c._id ? (
-                                    <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
-                                        <AlertTriangle size={16} className="text-red-400" />
-                                        <span className="text-xs font-medium text-red-200">Delete comment?</span>
-                                        <div className="flex gap-2 ml-2">
-                                            <button onClick={() => setCommentToDelete(null)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50">Cancel</button>
-                                            <button onClick={() => confirmDelete(c._id)} className="rounded bg-red-600 px-3 py-1 text-xs font-bold text-gray-900 hover:bg-red-500">Delete</button>
+                                    <div role="alertdialog" aria-label="Delete comment?" className="flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-3">
+                                        <AlertTriangle size={16} className="text-red-600" aria-hidden="true" />
+                                        <span className="text-sm font-medium text-red-900">Delete this comment?</span>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setCommentToDelete(null)} className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                                            <button onClick={() => confirmDelete(c._id)} autoFocus className="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700">Delete</button>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="relative flex items-end gap-2 max-w-full">
+                                    <div className="relative flex max-w-full items-end gap-2">
                                         {isMe && !isTemp && (
-                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 mb-2">
-                                                <button onClick={() => { setEditingCommentId(c._id); setEditContent(c.commentContent); }} className="text-gray-400 hover:text-gray-700"><Edit2 size={14} /></button>
-                                                <button onClick={() => setCommentToDelete(c._id)} className="text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+                                            <div className={`${actionsReveal} mb-1`}>
+                                                <button onClick={() => { setEditingCommentId(c._id); setEditContent(c.commentContent); }} className={`${actionBtn} hover:text-gray-900`} aria-label="Edit comment"><Edit2 size={14} /></button>
+                                                <button onClick={() => setCommentToDelete(c._id)} className={`${actionBtn} hover:bg-red-50 hover:text-red-700`} aria-label="Delete comment"><Trash2 size={14} /></button>
                                             </div>
                                         )}
 
-                                        {!isMe && (
-                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-[10px] font-bold text-gray-700 border border-gray-200">
-                                                {c.author?.profilePicture ? (
-                                                    <img src={c.author.profilePicture} alt="User" className="h-full w-full object-cover" />
-                                                ) : (authorName.charAt(0).toUpperCase())}
-                                            </div>
-                                        )}
+                                        {!isMe && <Avatar name={authorName} src={c.author?.profilePicture} size="sm" />}
 
-                                        <div className={`rounded-2xl px-4 py-3 text-sm border border-gray-200 ${isMe ? "bg-gray-100 text-gray-900 rounded-br-none" : "bg-white text-gray-900 rounded-bl-none"} max-w-[85%] sm:max-w-[75%]`}>
+                                        <div className={`max-w-[85%] rounded-2xl border px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere sm:max-w-[75%] ${isMe ? "rounded-br-md border-indigo-100 bg-indigo-50 text-gray-900" : "rounded-bl-md border-gray-200 bg-white text-gray-900"} ${isTemp ? "opacity-70" : ""}`}>
                                             {c.commentContent}
-                                            {c.attachments?.length > 0 && c.attachments[0]?.url && c.attachments[0]?.fileType?.startsWith('image/') && (
-                                                <img src={c.attachments[0].url} alt="media" className="mt-3 w-full max-h-[350px] rounded-lg object-contain bg-gray-50/50 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(c.attachments[0].url, '_blank')} />
+                                            {image && (
+                                                <a href={image.url} target="_blank" rel="noopener noreferrer" className="mt-3 block">
+                                                    <img src={image.url} alt={image.name || `Image shared by ${authorName}`} loading="lazy" className="max-h-[350px] w-full rounded-lg bg-gray-50 object-contain transition-opacity hover:opacity-90" />
+                                                </a>
                                             )}
                                         </div>
 
-                                        {isMe && (
-                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-[10px] font-bold text-gray-700 border border-gray-200">
-                                                {user?.profilePicture ? (
-                                                    <img src={user.profilePicture} alt="Me" className="h-full w-full object-cover" />
-                                                ) : (user?.fullName?.charAt(0).toUpperCase() || "U")}
-                                            </div>
-                                        )}
+                                        {isMe && <Avatar name={user?.fullName} src={user?.profilePicture} size="sm" />}
 
                                         {/* BUG #9 FIX: Only Admin (not the author) sees action buttons on others' comments */}
                                         {!isMe && isAdminUser && !isTemp && (
-                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 mb-2">
-                                                <button onClick={() => setCommentToDelete(c._id)} className="text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+                                            <div className={`${actionsReveal} mb-1`}>
+                                                <button onClick={() => setCommentToDelete(c._id)} className={`${actionBtn} hover:bg-red-50 hover:text-red-700`} aria-label={`Delete comment by ${authorName}`}><Trash2 size={14} /></button>
                                             </div>
                                         )}
                                     </div>
@@ -358,37 +375,41 @@ export const TaskChat = ({ task, project, socket, user }) => {
                 <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-gray-200 p-4 bg-gray-50 relative">
+            <div className="relative border-t border-gray-200 bg-gray-50 p-3 sm:p-4">
                 {typingUsers.length > 0 && (
-                    <div className="absolute -top-7 left-4 text-[11px] text-gray-500 italic flex items-center gap-1">
-                        <span className="flex gap-0.5 items-center mr-1 mt-0.5">
-                            <span className="h-1 w-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                            <span className="h-1 w-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                            <span className="h-1 w-1 bg-gray-400 rounded-full animate-bounce"></span>
+                    <div className="absolute -top-7 left-4 flex items-center gap-1 rounded-full bg-white/90 px-2 text-xs italic text-gray-600" aria-live="polite">
+                        <span className="mr-1 mt-0.5 flex items-center gap-0.5" aria-hidden="true">
+                            <span className="h-1 w-1 animate-pulse rounded-full bg-gray-400 [animation-delay:-0.3s]"></span>
+                            <span className="h-1 w-1 animate-pulse rounded-full bg-gray-400 [animation-delay:-0.15s]"></span>
+                            <span className="h-1 w-1 animate-pulse rounded-full bg-gray-400"></span>
                         </span>
-                        {typingUsers.length > 2 
-                            ? `${typingUsers.length} people are typing...` 
-                            : `${typingUsers.join(' and ')} ${typingUsers.length === 1 ? 'is' : 'are'} typing...`
+                        {typingUsers.length > 2
+                            ? `${typingUsers.length} people are typing…`
+                            : `${typingUsers.join(' and ')} ${typingUsers.length === 1 ? 'is' : 'are'} typing…`
                         }
                     </div>
                 )}
                 {commentFile && (
                     <div className="mb-2 flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5">
-                        <span className="truncate text-xs text-gray-700">{commentFile.name}</span>
-                        <button onClick={() => setCommentFile(null)} className="ml-auto text-gray-400 hover:text-red-400"><X size={14} /></button>
+                        <Paperclip size={14} className="shrink-0 text-gray-500" aria-hidden="true" />
+                        <span className="truncate text-xs text-gray-800">{commentFile.name}</span>
+                        <button onClick={() => setCommentFile(null)} className="ml-auto rounded p-1 text-gray-500 hover:bg-red-50 hover:text-red-700" aria-label={`Remove attachment ${commentFile.name}`}><X size={14} /></button>
                     </div>
                 )}
                 <form onSubmit={handleSendComment} className="flex items-center gap-2">
                     <FileDropZone compact multiple={false} onFilesDropped={(files) => setCommentFile(files[0])} uploading={uploadingCommentMedia} />
-                    <input 
-                        type="text" 
-                        value={newComment} 
-                        onChange={handleInputChange} 
-                        placeholder="Type a message..." 
-                        className="flex-1 rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-4 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" 
+                    <label htmlFor={`comment-input-${task._id}`} className="sr-only">Write a comment</label>
+                    <input
+                        id={`comment-input-${task._id}`}
+                        type="text"
+                        value={newComment}
+                        onChange={handleInputChange}
+                        maxLength={2000}
+                        placeholder="Write a comment…"
+                        className="min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-base text-gray-900 placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-3 focus:ring-indigo-500/20 sm:text-sm"
                     />
-                    <button type="submit" disabled={!newComment.trim() && !commentFile} className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors">
-                        <Send size={14} className="ml-0.5" />
+                    <button type="submit" disabled={!newComment.trim() && !commentFile} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white transition-colors hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-500" aria-label="Send comment">
+                        <Send size={16} />
                     </button>
                 </form>
             </div>

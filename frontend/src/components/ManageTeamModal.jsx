@@ -1,106 +1,129 @@
 import { useState } from "react";
-import { Users, X, UserPlus, Shield } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
+import { Users, X, UserPlus, Loader2, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import api from "../lib/axios";
+import { Avatar } from "./ui/avatar";
+import { btn, field } from "../lib/styles";
+import { errorMessage } from "../lib/format";
+import { toast } from "../lib/toast";
+
+const memberId = (m) => m?._id || m;
 
 export const ManageTeamModal = ({ project, onTeamUpdated }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [email, setEmail] = useState("");
     const [loading, setLoading] = useState(false);
+    const [removingId, setRemovingId] = useState(null);
     const [error, setError] = useState("");
+
+    const members = project.assignedTeamMembers || [];
 
     const handleAddMember = async (e) => {
         e.preventDefault();
+        const normalized = email.trim().toLowerCase();
+        if (members.some((m) => m.emailAddress?.toLowerCase() === normalized)) {
+            setError("That person is already on this project.");
+            return;
+        }
         setLoading(true);
         setError("");
 
         try {
-            // Note: Your current backend might need a dedicated route to fetch a user by email 
-            // and add them to the project.assignedTeamMembers array.
-            // For now, simulating the PUT request to update the project.
-            const updatedMembers = [...project.assignedTeamMembers, email]; // Needs actual User IDs in a real setup
+            // The backend resolves email strings to workspace users and rejects unknown addresses.
+            const updatedMembers = [...members.map(memberId), normalized];
             const res = await api.put(`/projects/${project._id}`, { assignedTeamMembers: updatedMembers });
-
             onTeamUpdated(res.data.project);
             setEmail("");
+            toast.success("Member added", normalized);
         } catch (err) {
-            setError("Failed to add member. Ensure email is registered.");
+            setError(errorMessage(err, "Couldn't add that member. Make sure they've joined your workspace."));
         } finally {
             setLoading(false);
         }
     };
 
+    const handleRemove = async (member) => {
+        setRemovingId(memberId(member));
+        setError("");
+        try {
+            const updatedMembers = members.filter((m) => memberId(m) !== memberId(member)).map(memberId);
+            const res = await api.put(`/projects/${project._id}`, { assignedTeamMembers: updatedMembers });
+            onTeamUpdated(res.data.project);
+        } catch (err) {
+            setError(errorMessage(err, "Couldn't remove that member. Please try again."));
+        } finally {
+            setRemovingId(null);
+        }
+    };
+
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) setError(""); }}>
             <DialogTrigger asChild>
-                <button className="flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-                    <Users size={16} /> Team
+                <button className={btn.secondary} aria-label={`Team (${members.length})`}>
+                    <Users size={16} aria-hidden="true" />
+                    <span className="hidden sm:inline">Team</span>
+                    <span className="tabular rounded bg-gray-100 px-1.5 text-xs text-gray-700">{members.length}</span>
                 </button>
             </DialogTrigger>
 
-            <DialogContent className="border-gray-200 bg-gray-50/90 p-0 shadow-2xl backdrop-blur-2xl sm:max-w-lg">
-                <div className="border-b border-gray-200 p-6 flex justify-between items-center">
-                    <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <Shield size={20} className="text-indigo-400" /> Manage Project Team 
-                    </DialogTitle>
+            <DialogContent className="gap-0 p-0 sm:max-w-lg">
+                <div className="border-b border-gray-200 p-6 pr-14">
+                    <DialogTitle className="text-lg font-semibold text-gray-900">Project team</DialogTitle>
+                    <DialogDescription className="mt-1 text-sm text-gray-600">Members can view this board, comment, and move tasks they're allowed to.</DialogDescription>
                 </div>
 
                 <div className="p-6">
-                    <div className="mb-6 space-y-3">
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Current Members</h4>
-                        {project.assignedTeamMembers?.length > 0 ? (
-                            project.assignedTeamMembers.map((member, idx) => (
-                                <div key={idx} className="flex items-center justify-between rounded-lg bg-white p-3 border border-gray-200">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-xs font-bold">
-                                            {member.profilePicture ? (
-                                                <img src={member.profilePicture} alt={member.fullName} className="h-full w-full object-cover" />
-                                            ) : (
-                                                (member.fullName || member.emailAddress || "?")[0].toUpperCase()
-                                            )}
-                                        </div>
-                                        <span className="text-sm text-gray-800">{member.fullName || member.emailAddress || member}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">Member</span>
-                                        <button 
-                                            onClick={async () => {
-                                                try {
-                                                    const updatedMembers = project.assignedTeamMembers.filter(m => (m._id || m) !== (member._id || member));
-                                                    const res = await api.put(`/projects/${project._id}`, { assignedTeamMembers: updatedMembers.map(m => m._id || m) });
-                                                    onTeamUpdated(res.data.project);
-                                                } catch (err) {
-                                                    setError("Failed to remove member.");
-                                                }
-                                            }}
-                                            className="text-red-400 hover:text-red-500 p-1"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-sm text-gray-400">No additional members assigned yet.</p>
-                        )}
-                    </div>
+                    {error && (
+                        <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                            <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
+                        </div>
+                    )}
 
-                    <form onSubmit={handleAddMember} className="border-t border-gray-200 pt-6">
-                        <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">Invite New Member</h4>
-                        {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
-                        <div className="flex gap-2">
+                    <h3 className="mb-3 text-sm font-medium text-gray-900">Members <span className="tabular text-gray-500">({members.length})</span></h3>
+                    {members.length > 0 ? (
+                        <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                            {members.map((member) => (
+                                <li key={memberId(member)} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2.5">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <Avatar name={member.fullName || member.emailAddress} src={member.profilePicture} />
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-medium text-gray-900">{member.fullName || member.emailAddress || "Team member"}</p>
+                                            {member.fullName && member.emailAddress && <p className="truncate text-xs text-gray-600">{member.emailAddress}</p>}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleRemove(member)}
+                                        disabled={!!removingId}
+                                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                                        aria-label={`Remove ${member.fullName || member.emailAddress || "member"} from project`}
+                                    >
+                                        {removingId === memberId(member) ? <Loader2 size={14} className="animate-spin" /> : <X size={16} />}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm text-gray-600">No members yet. Add someone from your workspace below.</p>
+                    )}
+
+                    <form onSubmit={handleAddMember} className="mt-6 border-t border-gray-200 pt-6">
+                        <label htmlFor="member-email" className="mb-1.5 block text-sm font-medium text-gray-900">Add by email</label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
                             <input
+                                id="member-email"
                                 type="email"
                                 required
+                                autoComplete="off"
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Colleague's email address..."
-                                className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none"
+                                onChange={(e) => { setEmail(e.target.value); setError(""); }}
+                                placeholder="colleague@company.com"
+                                className={`${field} flex-1`}
                             />
-                            <button disabled={loading} type="submit" className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 font-semibold text-gray-900 hover:bg-indigo-500 disabled:opacity-50">
-                                <UserPlus size={16} /> Add
+                            <button disabled={loading} type="submit" className={btn.primary}>
+                                {loading ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />} Add
                             </button>
                         </div>
+                        <p className="mt-1.5 text-xs text-gray-600">They need to have joined your workspace with its invite code first.</p>
                     </form>
                 </div>
             </DialogContent>

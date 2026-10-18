@@ -1,41 +1,57 @@
 import { useState } from "react";
-import { Settings, Loader2, Trash2, Save, AlertTriangle } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Settings, Loader2, Trash2, AlertTriangle, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../store/useStore";
+import { btn, field, label } from "../lib/styles";
+import { errorMessage } from "../lib/format";
+import { toast } from "../lib/toast";
+
+const toDateInput = (value) => (value ? new Date(value).toISOString().split("T")[0] : "");
+
+const fromProject = (project) => ({
+    projectName: project.projectName || "",
+    projectDescription: project.projectDescription || "",
+    projectStatus: project.projectStatus || "Active",
+    priority: project.priority || "Medium",
+    budget: project.budget ?? 0,
+    startDate: toDateInput(project.startDate),
+    endDate: toDateInput(project.endDate),
+});
 
 export const EditProjectModal = ({ api, project, onProjectUpdated }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [error, setError] = useState("");
     const { removeProject, updateProjectInStore } = useStore();
     const navigate = useNavigate();
 
-    const [formData, setFormData] = useState({
-        projectName: project.projectName || "",
-        projectDescription: project.projectDescription || "",
-        projectStatus: project.projectStatus || "Active",
-        priority: project.priority || "Medium",
-        budget: project.budget || 0,
-        startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : "",
-        endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : "",
-    });
+    const [formData, setFormData] = useState(() => fromProject(project));
+    const update = (key) => (e) => setFormData({ ...formData, [key]: e.target.value });
+    const datesInvalid = formData.startDate && formData.endDate && formData.endDate < formData.startDate;
+
+    const handleOpenChange = (open) => {
+        setIsOpen(open);
+        // Re-sync with the latest project every time the dialog opens so edits never start from stale data.
+        if (open) setFormData(fromProject(project));
+        if (!open) { setConfirmDelete(false); setError(""); }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (datesInvalid) return;
         setLoading(true);
+        setError("");
         try {
             const res = await api.put(`/projects/${project._id}`, formData);
             onProjectUpdated(res.data.project);
             updateProjectInStore(res.data.project);
             setIsOpen(false);
-        } catch (error) {
-            console.error("Failed to update project:", error);
-            alert("Failed to update project details.");
+            toast.success("Project updated");
+        } catch (err) {
+            setError(errorMessage(err, "Couldn't save the project. Please try again."));
         } finally {
             setLoading(false);
         }
@@ -43,69 +59,54 @@ export const EditProjectModal = ({ api, project, onProjectUpdated }) => {
 
     const handleDelete = async () => {
         setDeleteLoading(true);
+        setError("");
         try {
             await api.delete(`/projects/${project._id}`);
             removeProject(project._id);
             setIsOpen(false);
+            toast.success("Project deleted", project.projectName);
             navigate("/projects"); // Kick them back to the directory after deletion
-        } catch (error) {
-            console.error("Failed to delete project:", error);
-            alert("Failed to delete project.");
+        } catch (err) {
+            setError(errorMessage(err, "Couldn't delete the project. Please try again."));
             setDeleteLoading(false);
         }
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) setConfirmDelete(false); }}>
+        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-                <button
-                   
-                   
-                    className="flex items-center gap-2 rounded-lg bg-white border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-                >
-                    <Settings size={16} /> Project Settings
+                <button className={btn.secondary} aria-label="Project settings">
+                    <Settings size={16} aria-hidden="true" /> <span className="hidden sm:inline">Settings</span>
                 </button>
             </DialogTrigger>
 
-            <DialogContent className="border-gray-200 bg-gray-50/95 p-0 shadow-2xl backdrop-blur-2xl sm:max-w-xl">
-                <div className="flex items-center justify-between border-b border-gray-200 p-6">
-                    <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <Settings size={20} className="text-gray-500" /> Configure Project
-                    </DialogTitle>
+            <DialogContent className="gap-0 p-0 sm:max-w-xl">
+                <div className="border-b border-gray-200 p-6 pr-14">
+                    <DialogTitle className="text-lg font-semibold text-gray-900">Project settings</DialogTitle>
+                    <DialogDescription className="mt-1 text-sm text-gray-600">Changes are visible to everyone on the project.</DialogDescription>
                 </div>
 
-                <div className="p-6 overflow-y-auto max-h-[70vh]">
-                    <form id="edit-project-form" onSubmit={handleSubmit} className="space-y-5">
-                        <div className="space-y-2">
-                            <Label htmlFor="projectName" className="text-gray-500">Project Name</Label>
-                            <Input
-                                id="projectName"
-                                required
-                                className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                value={formData.projectName}
-                                onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
-                            />
+                <div className="p-6">
+                    {error && (
+                        <div role="alert" className="mb-5 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                            <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
+                        </div>
+                    )}
+                    <form id="edit-project-form" onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label htmlFor="edit-projectName" className={label}>Project name</label>
+                            <input id="edit-projectName" required maxLength={120} className={field} value={formData.projectName} onChange={update("projectName")} />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="projectDescription" className="text-gray-500">Description</Label>
-                            <Textarea
-                                id="projectDescription"
-                                required
-                                className="min-h-[100px] border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                value={formData.projectDescription}
-                                onChange={(e) => setFormData({ ...formData, projectDescription: e.target.value })}
-                            />
+                        <div>
+                            <label htmlFor="edit-projectDescription" className={label}>Description</label>
+                            <textarea id="edit-projectDescription" required rows={3} className={`${field} h-auto min-h-24 py-2`} value={formData.projectDescription} onChange={update("projectDescription")} />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="projectStatus" className="text-gray-500">Status</Label>
-                                <select
-                                    className="flex h-10 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    value={formData.projectStatus}
-                                    onChange={(e) => setFormData({ ...formData, projectStatus: e.target.value })}
-                                >
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label htmlFor="edit-projectStatus" className={label}>Status</label>
+                                <select id="edit-projectStatus" className={field} value={formData.projectStatus} onChange={update("projectStatus")}>
                                     <option value="Planning">Planning</option>
                                     <option value="Active">Active</option>
                                     <option value="On Hold">On Hold</option>
@@ -113,13 +114,9 @@ export const EditProjectModal = ({ api, project, onProjectUpdated }) => {
                                     <option value="Cancelled">Cancelled</option>
                                 </select>
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="priority" className="text-gray-500">Priority</Label>
-                                <select
-                                    className="flex h-10 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    value={formData.priority}
-                                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                                >
+                            <div>
+                                <label htmlFor="edit-priority" className={label}>Priority</label>
+                                <select id="edit-priority" className={field} value={formData.priority} onChange={update("priority")}>
                                     <option value="Low">Low</option>
                                     <option value="Medium">Medium</option>
                                     <option value="High">High</option>
@@ -128,72 +125,55 @@ export const EditProjectModal = ({ api, project, onProjectUpdated }) => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="budget" className="text-gray-500">Budget ($)</Label>
-                                <Input
-                                    id="budget"
-                                    type="number"
-                                    className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                    value={formData.budget}
-                                    onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                                />
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <div>
+                                <label htmlFor="edit-budget" className={label}>Budget (USD)</label>
+                                <input id="edit-budget" type="number" min={0} inputMode="numeric" className={`${field} tabular`} value={formData.budget} onChange={update("budget")} />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="startDate" className="text-gray-500">Start Date</Label>
-                                <Input
-                                    id="startDate"
-                                    type="date"
-                                    className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                    value={formData.startDate}
-                                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                                />
+                            <div>
+                                <label htmlFor="edit-startDate" className={label}>Start date</label>
+                                <input id="edit-startDate" type="date" className={field} value={formData.startDate} onChange={update("startDate")} />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="endDate" className="text-gray-500">End Date</Label>
-                                <Input
-                                    id="endDate"
-                                    type="date"
-                                    className="border-gray-200 bg-white text-gray-900 focus-visible:ring-indigo-500"
-                                    value={formData.endDate}
-                                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                                />
+                            <div>
+                                <label htmlFor="edit-endDate" className={label}>End date</label>
+                                <input id="edit-endDate" type="date" min={formData.startDate || undefined} aria-invalid={datesInvalid || undefined} className={field} value={formData.endDate} onChange={update("endDate")} />
                             </div>
                         </div>
+                        {datesInvalid && <p className="text-xs text-red-700">End date must be on or after the start date.</p>}
                     </form>
 
                     {/* DANGER ZONE */}
-                    <div className="mt-10 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-                        <h4 className="flex items-center gap-2 text-sm font-bold text-red-400">
-                            <AlertTriangle size={16} /> Danger Zone
-                        </h4>
-                        <p className="mt-1 text-xs text-gray-400">
-                            Permanently delete this project, all its tasks, and comments. This action cannot be undone.
+                    <div className="mt-8 rounded-xl border border-red-200 bg-red-50/50 p-4">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-red-800">
+                            <AlertTriangle size={16} aria-hidden="true" /> Delete project
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-700">
+                            Permanently deletes this project with all of its tasks and comments. This can't be undone.
                         </p>
 
                         {confirmDelete ? (
-                            <div className="mt-3 flex items-center gap-3">
-                                <button onClick={handleDelete} disabled={deleteLoading} className="flex items-center gap-2 rounded bg-red-600 px-3 py-1.5 text-xs font-bold text-gray-900 hover:bg-red-500 disabled:opacity-50">
-                                    {deleteLoading ? <Loader2 size={14} className="animate-spin" /> : "Yes, Delete Project"}
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <button onClick={handleDelete} disabled={deleteLoading} className={btn.danger}>
+                                    {deleteLoading ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Deleting…</> : "Yes, delete project"}
                                 </button>
-                                <button onClick={() => setConfirmDelete(false)} disabled={deleteLoading} className="text-xs text-gray-500 hover:text-gray-800">
-                                    Cancel
+                                <button onClick={() => setConfirmDelete(false)} disabled={deleteLoading} className={btn.ghost}>
+                                    Keep project
                                 </button>
                             </div>
                         ) : (
-                            <button onClick={() => setConfirmDelete(true)} className="mt-3 flex items-center gap-2 rounded bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors">
-                                <Trash2 size={14} /> Delete Project
+                            <button onClick={() => setConfirmDelete(true)} className={`${btn.dangerSoft} mt-3`}>
+                                <Trash2 size={14} aria-hidden="true" /> Delete project…
                             </button>
                         )}
                     </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 bg-gray-50">
-                    <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+                <div className="flex flex-col-reverse gap-2 border-t border-gray-200 bg-gray-50 p-4 sm:flex-row sm:justify-end sm:px-6">
+                    <button type="button" onClick={() => handleOpenChange(false)} className={btn.ghost}>
                         Cancel
                     </button>
-                    <button form="edit-project-form" type="submit" disabled={loading} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-gray-900 shadow-lg transition-all hover:bg-indigo-500 disabled:opacity-50">
-                        {loading ? <Loader2 className="animate-spin" size={18} /> : <><Save size={16} /> Save Changes</>}
+                    <button form="edit-project-form" type="submit" disabled={loading || datesInvalid} className={btn.primary}>
+                        {loading ? <><Loader2 className="animate-spin" size={16} aria-hidden="true" /> Saving…</> : "Save changes"}
                     </button>
                 </div>
             </DialogContent>

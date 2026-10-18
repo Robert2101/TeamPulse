@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
-import { Activity, Clock, PlusCircle, Edit2, Trash2, MessageSquare, CheckSquare, FolderKanban, Filter } from "lucide-react";
+import { Activity, MessageSquare, CheckSquare, FolderKanban, RotateCw } from "lucide-react";
 import api from "../lib/axios";
 import { useStore } from "../store/useStore";
+import { Avatar } from "../components/ui/avatar";
+import { relativeTime, errorMessage } from "../lib/format";
+import { btn, card, field } from "../lib/styles";
+import { cn } from "../lib/utils";
+
+const ENTITY_ICON = { Task: CheckSquare, Comment: MessageSquare, Project: FolderKanban };
 
 export const ActivityLog = () => {
-    const { projects, user } = useStore();
+    const { projects, projectsLoaded, user } = useStore();
     const isAdmin = user?.role?.roleName === 'Admin';
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [reloadKey, setReloadKey] = useState(0);
     const [selectedProject, setSelectedProject] = useState(projects[0]?._id || "");
     const [filter, setFilter] = useState("All"); // All, Task, Comment, Project
 
@@ -19,189 +27,158 @@ export const ActivityLog = () => {
 
     useEffect(() => {
         if (!selectedProject) return;
+        let cancelled = false;
         const fetchLogs = async () => {
             setLoading(true);
+            setError(null);
             try {
                 const res = await api.get(`/activities/${selectedProject}`);
-                setLogs(res.data);
+                if (!cancelled) setLogs(res.data);
             } catch (err) {
                 console.error(err);
+                if (!cancelled) setError(err);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
         fetchLogs();
-    }, [selectedProject]);
-
-    // Format relative time (e.g., "2 hours ago")
-    const getRelativeTime = (dateString) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffInSeconds = Math.floor((now - date) / 1000);
-
-        if (diffInSeconds < 60) return "Just now";
-        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-        if (diffInSeconds < 172800) return "Yesterday";
-        return date.toLocaleDateString();
-    };
-
-    // Determine the icon and color based on the action and entity
-    const getActionDetails = (action, entityType) => {
-        const actionLower = (action || '').toLowerCase();
-
-        let color = "text-gray-700 bg-gray-100 border-gray-200";
-        if (actionLower.includes('create') || actionLower.includes('add')) color = "text-gray-700 bg-gray-100 border-gray-200";
-        if (actionLower.includes('edit') || actionLower.includes('update')) color = "text-gray-700 bg-gray-100 border-gray-200";
-        if (actionLower.includes('delete') || actionLower.includes('remove')) color = "text-red-400 bg-red-500/10 border-red-500/20";
-
-        let Icon = Activity;
-        if (entityType === "Task") Icon = CheckSquare;
-        if (entityType === "Comment") Icon = MessageSquare;
-        if (entityType === "Project") Icon = FolderKanban;
-
-        return { color, Icon };
-    };
+        return () => { cancelled = true; };
+    }, [selectedProject, reloadKey]);
 
     // Generate a human-readable sentence using the metadata
     const generateLogSentence = (log) => {
-        const userName = <span className="font-bold text-gray-800">{log.user?.fullName || "System"}</span>;
+        const userName = <span className="font-semibold text-gray-900">{log.user?.fullName || "System"}</span>;
         const targetName = log.metadata?.taskName || log.metadata?.projectName || "an item";
 
         const actionLower = (log.action || '').toLowerCase();
-        let actionWord = <span className="text-gray-500">{log.action}</span>;
-
-        if (actionLower.includes('delete')) actionWord = <span className="font-medium text-red-400">deleted</span>;
-        else if (actionLower.includes('create')) actionWord = <span className="font-medium text-gray-700">created</span>;
-        else if (actionLower.includes('update')) actionWord = <span className="font-medium text-gray-700">{log.action?.toLowerCase()}</span>;
+        let actionWord = <span className="text-gray-700">{log.action?.toLowerCase()}</span>;
+        if (actionLower.includes('delete')) actionWord = <span className="font-medium text-red-700">deleted</span>;
+        else if (actionLower.includes('create')) actionWord = <span className="text-gray-700">created</span>;
 
         if (log.entityType === "Comment") {
-            return <div className="text-sm">{userName} {actionWord} a comment on a task.</div>;
+            return <p className="text-sm text-gray-700">{userName} {actionWord} a comment on a task.</p>;
         }
 
-        return <div className="text-sm">{userName} {actionWord} {log.entityType ? log.entityType.toLowerCase() : "item"} <span className="font-medium text-gray-700">"{targetName}"</span>.</div>;
+        return (
+            <p className="min-w-0 text-sm text-gray-700 wrap-anywhere">
+                {userName} {actionWord} {log.entityType ? log.entityType.toLowerCase() : "item"}{" "}
+                <span className="font-medium text-gray-900">"{targetName}"</span>
+            </p>
+        );
     };
 
     const filteredLogs = filter === "All" ? logs : logs.filter(log => log.entityType === filter);
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 pb-12">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 pb-6">
+        <div className="mx-auto max-w-5xl space-y-6 pb-12">
+            <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
-                        <Activity className="text-gray-700" /> Audit Log
-                    </h2>
-                    <p className="mt-2 text-gray-500">Enterprise tracking for accountability and security.</p>
+                    <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">Audit log</h1>
+                    <p className="mt-2 text-gray-600">Who changed what, and when, in each project.</p>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-1">
-                        <Filter size={16} className="text-gray-400" />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:w-auto">
+                    <div>
+                        <label htmlFor="audit-project" className="mb-1 block text-xs font-medium text-gray-600">Project</label>
                         <select
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="bg-transparent text-sm text-gray-700 focus:outline-none cursor-pointer py-1"
+                            id="audit-project"
+                            value={selectedProject}
+                            onChange={(e) => setSelectedProject(e.target.value)}
+                            disabled={projects.length === 0}
+                            className={cn(field, "md:w-64")}
                         >
-                            <option value="All">All Events</option>
-                            <option value="Project">Projects Only</option>
-                            <option value="Task">Tasks Only</option>
-                            <option value="Comment">Comments Only</option>
+                            {projects.length === 0 && <option value="">No projects available</option>}
+                            {projects.map(p => (
+                                <option key={p._id} value={p._id}>{p.projectName}</option>
+                            ))}
                         </select>
                     </div>
-
-                    <select
-                        value={selectedProject}
-                        onChange={(e) => setSelectedProject(e.target.value)}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none cursor-pointer"
-                    >
-                        {projects.length === 0 && <option value="">No Projects Available</option>}
-                        {projects.map(p => (
-                            <option key={p._id} value={p._id}>{p.projectName}</option>
-                        ))}
-                    </select>
+                    <div>
+                        <label htmlFor="audit-filter" className="mb-1 block text-xs font-medium text-gray-600">Show</label>
+                        <select id="audit-filter" value={filter} onChange={(e) => setFilter(e.target.value)} className={cn(field, "md:w-44")}>
+                            <option value="All">All events</option>
+                            <option value="Project">Projects only</option>
+                            <option value="Task">Tasks only</option>
+                            <option value="Comment">Comments only</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8 shadow-xl">
-                {loading ? (
-                    <div className="flex flex-col space-y-6">
+            <div className={cn(card, "p-5 sm:p-8")}>
+                {loading || (!projectsLoaded && !error) ? (
+                    <div className="flex flex-col space-y-6" role="status" aria-label="Loading activity">
                         {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="flex items-center gap-4 animate-pulse">
-                                <div className="h-10 w-10 rounded-full bg-gray-200 shrink-0" />
+                            <div key={i} className="flex animate-pulse items-center gap-4">
+                                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-200" />
                                 <div className="flex-1 space-y-2">
-                                    <div className="h-4 w-1/3 bg-gray-200 rounded" />
-                                    <div className="h-3 w-1/4 bg-gray-200 rounded" />
+                                    <div className="h-4 w-1/3 rounded bg-gray-200" />
+                                    <div className="h-3 w-1/4 rounded bg-gray-100" />
                                 </div>
                             </div>
                         ))}
                     </div>
+                ) : error ? (
+                    <div className="flex flex-col items-center py-12 text-center">
+                        <p className="font-medium text-gray-900">Couldn't load activity</p>
+                        <p className="mt-1 text-sm text-gray-600">{errorMessage(error)}</p>
+                        <button onClick={() => setReloadKey(k => k + 1)} className={`${btn.secondary} mt-4`}><RotateCw size={14} aria-hidden="true" /> Try again</button>
+                    </div>
                 ) : filteredLogs.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white mb-4">
-                            <Activity className="text-zinc-600" />
-                        </div>
-                        <h3 className="text-gray-700 font-medium">No activity found</h3>
-                        <p className="text-gray-400 text-sm mt-1">Try selecting a different project or clearing your filters.</p>
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 py-16 text-center">
+                        <Activity className="mb-3 text-gray-400" aria-hidden="true" />
+                        <h2 className="font-medium text-gray-900">No activity yet</h2>
+                        <p className="mt-1 max-w-sm text-sm text-gray-600">
+                            {projects.length === 0 ? "Create a project and its history will appear here." : "Try another project or show all event types."}
+                        </p>
                     </div>
                 ) : (
-                    <div className="space-y-6">
-                        <>
-                            {filteredLogs.map((log, index) => {
-                                const { color, Icon } = getActionDetails(log.action, log.entityType);
+                    <ol className="space-y-6">
+                        {filteredLogs.map((log, index) => {
+                            const Icon = ENTITY_ICON[log.entityType] || Activity;
+                            const isDelete = (log.action || "").toLowerCase().includes("delete");
+                            return (
+                                <li key={log._id} className="group relative flex items-start gap-4">
+                                    {/* Timeline Line */}
+                                    {index !== filteredLogs.length - 1 && (
+                                        <div className="absolute -bottom-6 left-5 top-11 w-px bg-gray-200" aria-hidden="true" />
+                                    )}
 
-                                return (
-                                    <div
-                                       
-                                       
-                                       
-                                        key={log._id}
-                                        className="group relative flex items-start gap-4"
-                                    >
-                                        {/* Timeline Line */}
-                                        {index !== filteredLogs.length - 1 && (
-                                            <div className="absolute top-10 bottom-[-24px] left-5 w-px bg-gray-200" />
-                                        )}
-
-                                        {/* Avatar / Icon */}
-                                        <div className="relative z-10 shrink-0">
-                                            {log.user?.profilePicture ? (
-                                                <img src={log.user.profilePicture} alt="User" className="h-10 w-10 rounded-full ring-4 ring-gray-200 object-cover" />
-                                            ) : (
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 ring-4 ring-gray-200 font-bold text-gray-700 border border-gray-200">
-                                                    {log.user?.fullName?.charAt(0) || "?"}
-                                                </div>
-                                            )}
-
-                                            {/* Tiny Entity Badge overlapping the avatar */}
-                                            <div className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 ${color}`}>
-                                                <Icon size={10} />
-                                            </div>
-                                        </div>
-
-                                        {/* Log Content Card */}
-                                        <div className="flex-1 flex flex-col justify-center pt-1.5">
-                                            <div className="flex items-center justify-between gap-4">
-                                                {generateLogSentence(log)}
-                                                <span className="shrink-0 text-xs font-medium text-gray-400 flex items-center gap-1.5">
-                                                    {getRelativeTime(log.createdAt)}
-                                                </span>
-                                            </div>
-
-                                            {/* Sub-meta details on hover for ultra pros */}
-                                            {isAdmin && (
-                                                <div className="mt-1 h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:h-auto group-hover:opacity-100">
-                                                    <div className="text-[10px] text-gray-500 flex items-center gap-3">
-                                                        <span>Entity ID: {log.entityId}</span>
-                                                        <span>User ID: {log.user?._id}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
+                                    {/* Avatar with entity badge */}
+                                    <div className="relative z-10 shrink-0">
+                                        <Avatar name={log.user?.fullName || "System"} src={log.user?.profilePicture} size="lg" ring />
+                                        <span className={cn(
+                                            "absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-white",
+                                            isDelete ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"
+                                        )} aria-hidden="true">
+                                            <Icon size={11} />
+                                        </span>
                                     </div>
-                                );
-                            })}
-                        </>
-                    </div>
+
+                                    <div className="flex min-w-0 flex-1 flex-col pt-2">
+                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                                            {generateLogSentence(log)}
+                                            <time
+                                                dateTime={log.createdAt}
+                                                title={new Date(log.createdAt).toLocaleString()}
+                                                className="tabular shrink-0 text-xs text-gray-600"
+                                            >
+                                                {relativeTime(log.createdAt)}
+                                            </time>
+                                        </div>
+
+                                        {/* Raw IDs for admins on hover */}
+                                        {isAdmin && (
+                                            <div className="hidden pt-1 font-mono text-[11px] text-gray-500 group-hover:flex group-hover:flex-wrap group-hover:gap-x-3">
+                                                <span>Entity {log.entityId}</span>
+                                                <span>User {log.user?._id}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ol>
                 )}
             </div>
         </div>
