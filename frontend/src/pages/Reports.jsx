@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Calendar, ChevronRight } from "lucide-react";
 import api from "../lib/axios";
 import { useStore } from "../store/useStore";
@@ -8,6 +8,7 @@ import { TASK_STATUS_DOT } from "../lib/taskMeta";
 import { formatDate, isOverdue, firstName } from "../lib/format";
 import { card } from "../lib/styles";
 import { cn } from "../lib/utils";
+import { gsap, useGSAP, EASE_OUT, prefersReducedMotion } from "../lib/motion";
 
 // Workflow stages, in board order. Colors validated with the dataviz palette checker (all checks pass).
 const STAGES = [
@@ -32,6 +33,14 @@ const StatStrip = ({ children }) => (
 
 const WorkflowBar = ({ stats }) => {
     const total = STAGES.reduce((sum, s) => sum + (stats[s.key] || 0), 0);
+    const barRef = useRef(null);
+
+    // One short reveal: segments grow left-to-right so the split reads as it forms.
+    useGSAP(() => {
+        if (!total || prefersReducedMotion()) return;
+        gsap.from(barRef.current.children, { scaleX: 0, transformOrigin: "left center", duration: 0.6, stagger: 0.08, ease: EASE_OUT });
+    }, { dependencies: [total > 0], scope: barRef });
+
     return (
         <section className={cn(card, "p-5")} aria-labelledby="workflow-heading">
             <div className="flex items-baseline justify-between gap-4">
@@ -42,7 +51,7 @@ const WorkflowBar = ({ stats }) => {
                 <p className="mt-4 text-sm text-gray-600">No tasks yet. Once projects have tasks, their progress shows here.</p>
             ) : (
                 <>
-                    <div className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded" role="img" aria-label={STAGES.map(s => `${s.label}: ${stats[s.key] || 0}`).join(", ")}>
+                    <div ref={barRef} className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded" role="img" aria-label={STAGES.map(s => `${s.label}: ${stats[s.key] || 0}`).join(", ")}>
                         {STAGES.map((s) => {
                             const count = stats[s.key] || 0;
                             if (!count) return null;

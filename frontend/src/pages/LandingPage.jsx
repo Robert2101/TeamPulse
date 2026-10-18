@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { gsap, useGSAP, EASE_OUT } from "../lib/motion";
 import GradientBlinds from "../components/GradientBlinds";
 import ScrollStack, { ScrollStackItem } from "../components/ScrollStack";
 import { btn } from "../lib/styles";
@@ -26,6 +28,18 @@ const FeatureBody = ({ feature }) => (
 export const LandingPage = () => {
     const navigate = useNavigate();
     const reduceMotion = prefersReducedMotion();
+    const heroRef = useRef(null);
+
+    // Focal moment: the name rises out of a mask, then a single heartbeat is drawn beneath it.
+    useGSAP(() => {
+        if (reduceMotion) return;
+        const pulse = heroRef.current.querySelector("[data-pulse-line]");
+        const length = pulse.getTotalLength();
+        gsap.timeline({ defaults: { ease: EASE_OUT } })
+            .from("[data-hero-char]", { yPercent: 110, duration: 0.9, stagger: 0.035 })
+            .fromTo(pulse, { strokeDasharray: length, strokeDashoffset: length }, { strokeDashoffset: 0, duration: 1.1, ease: "power2.inOut" }, "-=0.45")
+            .from("[data-hero-fade]", { opacity: 0, y: 14, duration: 0.7, stagger: 0.08 }, "-=0.8");
+    }, { scope: heroRef });
 
     return (
         <div className="relative bg-gray-50 text-gray-900 selection:bg-gray-200">
@@ -71,16 +85,30 @@ export const LandingPage = () => {
                 <div className="pointer-events-none absolute -right-[10%] top-[20%] z-0 h-100 w-100 rounded-full bg-gray-200/40 blur-[100px]" aria-hidden="true" />
 
                 {/* --- THE TEXT CONTENT --- */}
-                <div className="pointer-events-none z-10 text-center">
-                    <h1 className="mb-6 text-6xl font-extrabold tracking-[-0.04em] drop-shadow-2xl md:text-8xl">
-                        TeamPulse
+                <div ref={heroRef} className="pointer-events-none z-10 text-center">
+                    <h1 aria-label="TeamPulse" className="overflow-hidden pb-2 text-6xl font-extrabold tracking-[-0.04em] drop-shadow-2xl md:text-8xl">
+                        {[..."TeamPulse"].map((char, i) => (
+                            <span key={i} data-hero-char aria-hidden="true" className="inline-block">{char}</span>
+                        ))}
                     </h1>
 
-                    <p className="mx-auto mb-10 max-w-xl text-lg font-medium text-gray-800 drop-shadow-md md:text-xl">
+                    {/* A single heartbeat: the "pulse" in TeamPulse */}
+                    <svg viewBox="0 0 280 40" className="mx-auto mb-6 h-8 w-56 text-gray-900 md:h-10 md:w-72" fill="none" aria-hidden="true">
+                        <path
+                            data-pulse-line
+                            d="M2 22 H96 L106 22 L114 8 L124 34 L133 14 L140 22 H278"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
+
+                    <p data-hero-fade className="mx-auto mb-10 max-w-xl text-lg font-medium text-gray-800 drop-shadow-md md:text-xl">
                         Ditch the chaos. Experience project management that breathes with your team.
                     </p>
 
-                    <div className="pointer-events-auto flex flex-col items-center justify-center gap-3 sm:flex-row">
+                    <div data-hero-fade className="pointer-events-auto flex flex-col items-center justify-center gap-3 sm:flex-row">
                         <button
                             onClick={() => navigate('/register')}
                             className="cursor-pointer rounded-full bg-gray-900 px-8 py-4 font-semibold text-white shadow-[0_8px_24px_-8px_rgba(15,23,42,0.5)] transition-colors hover:bg-gray-800 active:translate-y-px"
