@@ -14,7 +14,7 @@ const chatbotInteractionSchema = new mongoose.Schema({
     },
     classifiedIntent: {
         type: String,
-        enum: ["task_query", "project_update", "reminder", "navigation", "general"],
+        enum: ["task_query", "task_update", "project_update", "reminder", "navigation", "general"],
         default: "general"
     },
     responseGenerated: {
