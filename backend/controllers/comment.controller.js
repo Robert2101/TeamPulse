@@ -3,6 +3,7 @@ import Task from '../models/task.model.js';
 import logger from '../utils/logger.js';
 import { getIO } from '../socket/socket.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { canAccessProject } from '../utils/projectAccess.js';
 
 export const addComment = async (req, res) => {
     try {
@@ -18,11 +19,7 @@ export const addComment = async (req, res) => {
 
         const project = task.projectReference;
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             return res.status(403).json({ message: "Access Denied. You cannot comment on this task." });
         }
 
@@ -67,11 +64,7 @@ export const getCommentsByTask = async (req, res) => {
 
         const project = task.projectReference;
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to read comments on unauthorized task ${taskId}`);
             return res.status(403).json({ message: "Access Denied. You cannot view comments for this project." });
         }

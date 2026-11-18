@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import logger from "../utils/logger.js";
 import User from "../models/user.model.js";
 import Project from "../models/project.model.js";
+import { canAccessProject } from "../utils/projectAccess.js";
 
 let io;
 
@@ -79,12 +80,7 @@ export const initSocket = (server) => {
                 }
 
                 // Role-Based Security for WebSocket Rooms
-                const isAdmin = socket.dbUser.role?.roleName === 'Admin';
-                const pmId = project.projectManager ? project.projectManager.toString() : null;
-                const isManager = pmId === socket.dbUser._id.toString();
-                const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(id => id.toString() === socket.dbUser._id.toString());
-
-                if (isAdmin || isManager || isMember) {
+                if (canAccessProject(project, socket.dbUser)) {
                     socket.join(projectId);
                     logger.info(`${socket.dbUser.fullName} securely joined Project Room: ${projectId}`);
                 } else {
