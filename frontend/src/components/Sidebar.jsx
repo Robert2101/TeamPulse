@@ -1,62 +1,51 @@
 import { useState } from "react";
-import { LayoutDashboard, FolderKanban, ListChecks, MessageSquare, Activity, Settings, LogOut, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { Settings, LogOut, PanelLeftClose, PanelLeftOpen, X, Search } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useStore } from "../store/useStore";
 import { Avatar } from "./ui/avatar";
+import { LogoMark } from "./ui/logo";
+import { Pulse } from "./ui/pulse";
+import { Kbd } from "./ui/kbd";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
+import { visibleNav, isActivePath } from "../lib/navigation";
+import { MOD_LABEL } from "../hooks/useHotkeys";
 import { btn } from "../lib/styles";
 import { cn } from "../lib/utils";
 
-const menuItems = [
-    { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
-    { icon: FolderKanban, label: "Projects", path: "/projects" },
-    { icon: ListChecks, label: "My Tasks", path: "/tasks" },
-    { icon: MessageSquare, label: "AI Assistant", path: "/ai-chat" },
-    { icon: Activity, label: "Audit Log", path: "/activity" },
-];
-
-const isActivePath = (pathname, path) =>
-    pathname === path || (path === "/projects" && pathname.startsWith("/project/"));
+const rowBase = "flex min-h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors duration-150";
+const rowIdle = "text-gray-600 hover:bg-gray-100 hover:text-gray-900";
+const rowActive = "bg-white font-medium text-gray-900 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-gray-200";
 
 /**
- * Navigation content shared by the desktop rail and the mobile drawer.
+ * Navigation shared by the desktop rail and the mobile drawer.
  * `mobile` renders the drawer variant (always expanded, with a close button).
  */
 export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, onClose }) => {
     const location = useLocation();
-    const { user, logout } = useStore();
+    const { user, logout, projects, pulse, setCommandOpen } = useStore();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const collapsed = !mobile && isCollapsed;
+    const isDemo = user?.workspace?.isDemo;
 
-    const isAdmin = user?.role?.roleName === 'Admin';
-    const isManager = user?.role?.roleName === 'Project Manager';
-
-    // Mirror the route guards in App.jsx so we never link to a page that bounces the user.
-    const filteredMenuItems = menuItems.filter(item => {
-        if (item.path === '/dashboard' && !user?.role?.viewReports) return false;
-        if (item.path === '/activity' && (!user?.role?.viewReports || (!isAdmin && !isManager))) return false;
-        return true;
-    });
-
-    const handleConfirmLogout = () => {
-        setShowLogoutModal(false);
-        logout();
+    const openSearch = () => {
+        onClose?.();
+        setCommandOpen(true);
     };
 
     return (
         <>
-            <div className={cn("flex h-full flex-col", mobile ? "w-72 bg-white" : "w-full")}>
-                {/* Logo Section */}
-                <div className={cn("flex h-16 shrink-0 items-center", collapsed ? "justify-center" : "justify-between pl-5 pr-3")}>
+            <div className={cn("flex h-full flex-col", mobile ? "w-72 bg-gray-50" : "w-full")}>
+                {/* Workspace */}
+                <div className={cn("flex h-16 shrink-0 items-center gap-2", collapsed ? "justify-center px-2" : "pl-4 pr-2")}>
                     {!collapsed && (
-                        <Link to={user?.role?.viewReports ? "/dashboard" : "/projects"} onClick={onClose} className="flex items-center gap-2.5 rounded-lg">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900">
-                                <span className="h-2.5 w-2.5 rounded-full bg-white" />
+                        <Link to={user?.role?.viewReports ? "/dashboard" : "/projects"} onClick={onClose} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg">
+                            <LogoMark size={30} />
+                            <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-gray-900">{user?.workspace?.workspaceName || "TeamPulse"}</span>
+                                <span className="block truncate text-xs text-gray-500">{isDemo ? "Demo workspace" : "TeamPulse"}</span>
                             </span>
-                            <span className="text-[17px] font-semibold tracking-tight text-gray-900">TeamPulse</span>
                         </Link>
                     )}
-
                     {mobile ? (
                         <button onClick={onClose} className={btn.icon} aria-label="Close navigation">
                             <X size={20} />
@@ -74,11 +63,26 @@ export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, on
                     )}
                 </div>
 
-                {/* Navigation Menu */}
-                <nav aria-label="Main" className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
-                    <ul className="space-y-0.5">
-                        {filteredMenuItems.map((item) => {
-                            const isActive = isActivePath(location.pathname, item.path);
+                {/* Search / command palette */}
+                <div className={cn("shrink-0 pb-2", collapsed ? "px-2" : "px-3")}>
+                    <button
+                        onClick={openSearch}
+                        title={collapsed ? `Search (${MOD_LABEL}K)` : undefined}
+                        className={cn(
+                            "flex h-9 w-full items-center gap-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,color,transform] duration-150 ease-snappy hover:border-gray-300 hover:text-gray-700 active:scale-98",
+                            collapsed ? "justify-center px-0" : "px-2.5"
+                        )}
+                    >
+                        <Search size={15} aria-hidden="true" className="shrink-0" />
+                        <span className={collapsed ? "sr-only" : "flex-1 text-left"}>Search</span>
+                        {!collapsed && <Kbd>{MOD_LABEL}K</Kbd>}
+                    </button>
+                </div>
+
+                <nav aria-label="Main" className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3">
+                    <ul className="flex flex-col gap-0.5">
+                        {visibleNav(user).map((item) => {
+                            const isActive = isActivePath(location.pathname, item.path) && !location.pathname.startsWith("/project/");
                             return (
                                 <li key={item.path}>
                                     <Link
@@ -86,64 +90,86 @@ export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, on
                                         onClick={onClose}
                                         aria-current={isActive ? "page" : undefined}
                                         title={collapsed ? item.label : undefined}
-                                        className={cn(
-                                            "flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
-                                            collapsed && "justify-center px-0",
-                                            isActive
-                                                ? "bg-white text-gray-900 shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-gray-200"
-                                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                                        )}
+                                        className={cn(rowBase, collapsed && "justify-center px-0", isActive ? rowActive : rowIdle)}
                                     >
-                                        <item.icon size={18} aria-hidden="true" className={cn("shrink-0", isActive ? "text-indigo-600" : "text-gray-500")} />
+                                        <item.icon size={17} aria-hidden="true" className={cn("shrink-0", isActive ? "text-indigo-600" : "text-gray-500")} />
                                         <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
                                     </Link>
                                 </li>
                             );
                         })}
                     </ul>
+
+                    {/* Projects, each with its 14-day pulse */}
+                    {projects.length > 0 && (
+                        <div className="mt-6">
+                            {!collapsed && <h2 className="mb-1.5 px-2.5 text-xs font-medium text-gray-500">Your projects</h2>}
+                            <ul className="flex flex-col gap-0.5">
+                                {projects.map((project) => {
+                                    const path = `/project/${project._id}`;
+                                    const isActive = location.pathname === path;
+                                    return (
+                                        <li key={project._id}>
+                                            <Link
+                                                to={path}
+                                                onClick={onClose}
+                                                aria-current={isActive ? "page" : undefined}
+                                                title={collapsed ? project.projectName : undefined}
+                                                className={cn(rowBase, "group", collapsed && "justify-center px-0", isActive ? rowActive : rowIdle)}
+                                            >
+                                                <span className={cn(
+                                                    "flex h-5 min-w-8 shrink-0 items-center justify-center rounded-md px-1 font-mono text-[10.5px] font-medium",
+                                                    isActive ? "bg-indigo-50 text-indigo-700" : "bg-gray-200/70 text-gray-600"
+                                                )}>
+                                                    {project.key ?? project.projectName?.slice(0, 3).toUpperCase()}
+                                                </span>
+                                                {!collapsed && (
+                                                    <>
+                                                        <span className="min-w-0 flex-1 truncate">{project.projectName}</span>
+                                                        <Pulse values={pulse?.byProject?.[project._id]} width={34} height={14} active={isActive} />
+                                                    </>
+                                                )}
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    )}
                 </nav>
 
-                {/* Bottom User Profile & Settings Section */}
-                <div className="shrink-0 space-y-1 border-t border-gray-200 p-3">
-                    <Link
-                        to="/settings"
-                        onClick={onClose}
-                        aria-current={location.pathname === "/settings" ? "page" : undefined}
-                        className={cn(
-                            "group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-gray-100",
-                            collapsed && "justify-center",
-                            location.pathname === "/settings" && "bg-white ring-1 ring-gray-200"
-                        )}
-                        title="Account settings"
-                    >
-                        <Avatar name={user?.fullName} src={user?.profilePicture} size="lg" />
-                        {!collapsed && (
-                            <>
+                {/* Account */}
+                <div className="shrink-0 border-t border-gray-200 p-3">
+                    <div className={cn("flex items-center gap-1", collapsed && "flex-col")}>
+                        <Link
+                            to="/settings"
+                            onClick={onClose}
+                            aria-current={location.pathname === "/settings" ? "page" : undefined}
+                            className={cn(
+                                "group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-gray-100",
+                                collapsed && "justify-center",
+                                location.pathname === "/settings" && "bg-white ring-1 ring-gray-200"
+                            )}
+                            title="Account settings"
+                        >
+                            <Avatar name={user?.fullName} src={user?.profilePicture} size="md" />
+                            {!collapsed && (
                                 <span className="flex min-w-0 flex-1 flex-col">
-                                    <span className="truncate text-sm font-semibold text-gray-900">{user?.fullName}</span>
-                                    <span className="truncate text-xs text-gray-600">{user?.role?.roleName || 'Member'}</span>
+                                    <span className="truncate text-sm font-medium text-gray-900">{user?.fullName}</span>
+                                    <span className="truncate text-xs text-gray-500">{user?.role?.roleName || "Member"}</span>
                                 </span>
-                                <Settings size={16} aria-hidden="true" className="shrink-0 text-gray-500 transition-colors group-hover:text-gray-800" />
-                            </>
-                        )}
-                        {collapsed && <span className="sr-only">Account settings</span>}
-                    </Link>
-
-                    <button
-                        onClick={() => setShowLogoutModal(true)}
-                        title={collapsed ? "Log out" : undefined}
-                        className={cn(
-                            "flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-red-50 hover:text-red-700",
-                            collapsed && "justify-center px-0"
-                        )}
-                    >
-                        <LogOut size={16} aria-hidden="true" className="shrink-0" />
-                        <span className={collapsed ? "sr-only" : undefined}>Log out</span>
-                    </button>
+                            )}
+                            {!collapsed && <Settings size={15} aria-hidden="true" className="shrink-0 text-gray-400 transition-colors group-hover:text-gray-700" />}
+                            {collapsed && <span className="sr-only">Account settings</span>}
+                        </Link>
+                        <button onClick={() => setShowLogoutModal(true)} className={btn.icon} aria-label="Log out" title="Log out">
+                            <LogOut size={16} aria-hidden="true" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Logout Confirmation */}
+            {/* Logout confirmation */}
             <Dialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
                 <DialogContent className="gap-0 p-6 sm:max-w-md">
                     <div className="flex items-start gap-4">
@@ -151,15 +177,21 @@ export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, on
                             <LogOut size={18} aria-hidden="true" />
                         </span>
                         <div className="pr-6">
-                            <DialogTitle className="text-lg font-semibold leading-tight text-gray-900">Log out of TeamPulse?</DialogTitle>
+                            <DialogTitle className="text-lg font-semibold leading-tight text-gray-900">
+                                {isDemo ? "Leave the demo?" : "Log out of TeamPulse?"}
+                            </DialogTitle>
                             <DialogDescription className="mt-2 text-sm leading-relaxed text-gray-600">
-                                You'll need your email and password to get back into your workspace.
+                                {isDemo
+                                    ? "This private demo workspace is discarded when you leave. You can start a fresh one any time."
+                                    : "This signs you out on every device. You'll need your email and password to get back in."}
                             </DialogDescription>
                         </div>
                     </div>
                     <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <button onClick={() => setShowLogoutModal(false)} className={btn.ghost}>Cancel</button>
-                        <button onClick={handleConfirmLogout} className={btn.danger} autoFocus>Log out</button>
+                        <button onClick={() => { setShowLogoutModal(false); logout(); }} className={btn.danger} autoFocus>
+                            {isDemo ? "Leave demo" : "Log out"}
+                        </button>
                     </div>
                 </DialogContent>
             </Dialog>

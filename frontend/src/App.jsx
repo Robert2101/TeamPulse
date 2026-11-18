@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { useStore } from "./store/useStore";
 import { Toaster } from "./components/ui/toaster";
 import { DashboardLayout } from "./components/DashboardLayout";
+import { canReadAuditLog } from "./lib/navigation";
 
 // Every page is its own chunk: visitors download the landing page's WebGL and scroll effects,
 // or the app's screens, but never both up front.
@@ -47,8 +48,7 @@ const ProtectedLayout = () => {
 
 export default function App() {
   const { user, isAuthChecking, checkAuth } = useStore();
-  // Same rule as the API and the sidebar: the audit log is for Admins and Project Managers.
-  const canReadAuditLog = user?.role?.viewReports && ["Admin", "Project Manager"].includes(user?.role?.roleName);
+  const canReadAudit = canReadAuditLog(user);
 
   useEffect(() => {
     checkAuth();
@@ -74,7 +74,7 @@ export default function App() {
           <Route path="/project/:id" element={<ProjectBoard />} />
           <Route path="/tasks" element={<MyTasks />} />
           <Route path="/ai-chat" element={<AiChat />} />
-          <Route path="/activity" element={canReadAuditLog ? <ActivityLog /> : <Navigate to="/projects" replace />} />
+          <Route path="/activity" element={canReadAudit ? <ActivityLog /> : <Navigate to="/projects" replace />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
 

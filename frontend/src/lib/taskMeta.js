@@ -6,3 +6,9 @@ export const TASK_STATUS_DOT = {
     Review: "bg-amber-500",
     Done: "bg-emerald-500",
 };
+
+/** Stable task reference like APP-12, or null for tasks created before projects had keys. */
+export const taskKey = (task, project) => {
+    const key = project?.key ?? task?.projectReference?.key;
+    return key && task?.number ? `${key}-${task.number}` : null;
+};
