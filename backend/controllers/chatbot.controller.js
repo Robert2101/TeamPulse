@@ -25,7 +25,7 @@ export const getChatHistory = async (req, res) => {
             formatted.push({
                 id: 1,
                 role: "assistant",
-                text: "Hello! I am your TeamPulse AI. I can help you with task queries, project updates, or finding your way around. What do you need?"
+                text: `Hi ${req.dbUser.fullName?.split(' ')[0] || 'there'}. Ask me about your projects and tasks, or tell me to move one of your tasks, like "move the API docs to Done".`
             });
         }
 
