@@ -118,7 +118,7 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
                             {saving === "priority" ? <Loader2 size={14} className="animate-spin text-gray-500" aria-hidden="true" /> : <Flag size={14} className="text-gray-500" aria-hidden="true" />}
                             <span className="sr-only">Priority</span>
                             <select className={chipSelect} value={task.priority || "Medium"} disabled={saving === "priority"} onChange={(e) => saveField("priority", e.target.value, "Couldn't change the priority")}>
-                                {PRIORITIES.map((p) => <option key={p} value={p}>{p} priority</option>)}
+                                {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </label>
                     ) : (
