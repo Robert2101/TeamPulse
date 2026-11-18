@@ -9,6 +9,19 @@ const projectSchema = new mongoose.Schema({
         index: true
     },
 
+    // Short prefix for task keys, e.g. APP in APP-12; taskCounter hands out the numbers.
+    key: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        maxlength: 6
+    },
+
+    taskCounter: {
+        type: Number,
+        default: 0
+    },
+
     workspace: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Workspace",

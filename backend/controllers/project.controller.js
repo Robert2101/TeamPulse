@@ -16,6 +16,17 @@ const PROJECT_FIELDS = [
     'priority', 'projectStatus', 'projectType', 'assignedTeamMembers',
 ];
 
+// Task-key prefix from the project name: initials for several words ("Mobile app 3.0" -> MA3),
+// the first letters for one word ("Website" -> WEB), made unique within the workspace.
+const projectKeyFor = async (name, workspace) => {
+    const words = name.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+    const base = (words.length > 1 ? words.slice(0, 3).map((w) => w[0]).join('') : (words[0] || 'PRJ').slice(0, 3)) || 'PRJ';
+    const taken = new Set((await Project.find({ workspace }).select('key').lean()).map((p) => p.key));
+    if (!taken.has(base)) return base;
+    for (let n = 2; n < 100; n++) if (!taken.has(`${base}${n}`)) return `${base}${n}`;
+    return `${base}${Date.now() % 1000}`;
+};
+
 export const createProject = async (req, res) => {
     try {
         const {
@@ -52,6 +63,7 @@ export const createProject = async (req, res) => {
         }
 
         const newProject = new Project({
+            key: await projectKeyFor(projectName, req.dbUser.workspace?._id || req.dbUser.workspace),
             projectName,
             projectDescription,
             budget,
