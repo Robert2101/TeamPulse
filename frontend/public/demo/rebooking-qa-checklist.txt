@@ -1,0 +1,21 @@
+One-tap rebooking: QA checklist (build 3.0.0-rc4)
+
+Passed
+[x] Cancellation push arrives and opens the trip
+[x] Two alternatives shown within 30 s (median 11 s over 40 runs)
+[x] Rebooking keeps seat class and checked bags
+[x] Works with the app in the background and after a cold start
+[x] VoiceOver reads alternatives in order: time, stops, price difference
+
+Open
+[ ] Connecting flights: only the cancelled leg is replaced; the second leg
+    keeps the old connection time. Expected: the whole journey is re-planned.
+[ ] Infant tickets: infant on lap is dropped from the new booking
+    (Android only, repro 4/4 on Pixel 7).
+
+Not tested yet
+[ ] Partner airlines without the booking webhook (fallback to email)
+[ ] Rebooking while offline (should queue and confirm when back online)
+
+Devices: iPhone 15, iPhone SE (3rd gen), Pixel 7, Galaxy S22
+Builds: iOS 3.0.0 (412), Android 3.0.0 (2210)
