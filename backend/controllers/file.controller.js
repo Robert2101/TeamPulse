@@ -8,6 +8,7 @@ import logger from '../utils/logger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
 import { canAccessProject } from '../utils/projectAccess.js';
+import { isDemoAsset } from '../utils/demoAssets.js';
 
 const PROJECT_SCOPED = ['Task', 'Comment', 'Project'];
 
@@ -143,7 +144,9 @@ export const deleteFile = async (req, res) => {
             return res.status(403).json({ message: "You are not authorised to delete this file." });
         }
 
-        await cloudinary.uploader.destroy(file.cloudinaryId, { resource_type: file.cloudinaryResourceType || 'raw' });
+        if (!isDemoAsset(file)) {
+            await cloudinary.uploader.destroy(file.cloudinaryId, { resource_type: file.cloudinaryResourceType || 'raw' });
+        }
 
         let projectIdToBroadcast = null;
 

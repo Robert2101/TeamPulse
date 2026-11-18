@@ -6,22 +6,9 @@ import bcrypt from 'bcryptjs';
 import logger from '../utils/logger.js';
 import mongoose from 'mongoose';
 import { delCache } from '../config/redis.js';
-import { authCookieOptions, issueSession, revokeSessions } from '../utils/session.js';
+import { authCookieOptions, issueSession, revokeSessions, toClientUser } from '../utils/session.js';
 import { csrfTokenFor } from '../middleware/csrf.middleware.js';
 import { withTransaction } from '../utils/transaction.js';
-
-// What the client may see about the signed-in user: never tokenVersion, and the workspace
-// invite code only for Admins (they're the ones who share it).
-const toClientUser = (user) => {
-    const plain = typeof user?.toObject === 'function' ? user.toObject() : { ...user };
-    delete plain.tokenVersion;
-    delete plain.password;
-    if (plain.role?.roleName !== 'Admin' && plain.workspace?.inviteCode) {
-        plain.workspace = { ...plain.workspace };
-        delete plain.workspace.inviteCode;
-    }
-    return plain;
-};
 
 export const signup = async (req, res) => {
     try {
@@ -59,6 +46,9 @@ export const signup = async (req, res) => {
 
             const workspace = await Workspace.findOne({ inviteCode: String(inviteCode).trim().toUpperCase() });
             if (!workspace) return res.status(404).json({ message: "Invalid invite code" });
+            if (workspace.isDemo) {
+                return res.status(400).json({ message: "That code belongs to a demo workspace. Create your own workspace instead." });
+            }
 
             // ENFORCING PRINCIPLE OF LEAST PRIVILEGE
             // Everyone who joins via a generic invite code is assigned the absolutely lowest default role: Stakeholder (Read-only Viewer).
