@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar, User, X, Trash2, Loader2, CircleDot, Flag } from "lucide-react";
+import { Calendar, User, X, Trash2, Loader2, CircleDot, Flag, Link2 } from "lucide-react";
 import api from "../../lib/axios";
 import { PriorityBadge, TaskStatusBadge } from "../ui/badges";
 import { formatDate, isOverdue, errorMessage } from "../../lib/format";
@@ -31,6 +31,15 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
             return false;
         } finally {
             setSaving(null);
+        }
+    };
+
+    const copyLink = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            toast.success("Link copied", "Anyone on this project can open the task with it.");
+        } catch {
+            toast.error("Couldn't copy the link", "Copy it from the address bar instead.");
         }
     };
 
@@ -181,9 +190,14 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
                     )}
                 </div>
             </div>
-            <button onClick={onClose} className={cn(btn.icon, "-mr-2 shrink-0")} aria-label="Close task details">
-                <X size={20} />
-            </button>
+            <div className="-mr-2 flex shrink-0 items-center gap-1">
+                <button onClick={copyLink} className={btn.icon} aria-label="Copy link to this task" title="Copy link">
+                    <Link2 size={18} aria-hidden="true" />
+                </button>
+                <button onClick={onClose} className={btn.icon} aria-label="Close task details">
+                    <X size={20} aria-hidden="true" />
+                </button>
+            </div>
         </div>
     );
 };

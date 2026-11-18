@@ -95,7 +95,7 @@ export const MyTasks = () => {
                         return (
                             <li key={task._id} className="min-w-0">
                                 <Link
-                                    to={projectId ? `/project/${projectId}` : "/projects"}
+                                    to={projectId ? `/project/${projectId}?task=${task._id}` : "/projects"}
                                     className={cn(card, "group flex h-full flex-col p-5 transition-[border-color,box-shadow] hover:border-gray-300 hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]")}
                                 >
                                     <div className="mb-3 flex items-center justify-between gap-2">
