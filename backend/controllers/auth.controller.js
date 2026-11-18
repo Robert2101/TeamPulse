@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import logger from '../utils/logger.js';
 import mongoose from 'mongoose';
 import { delCache } from '../config/redis.js';
+import { authCookieOptions, issueSession, revokeSessions } from '../utils/session.js';
 
 export const signup = async (req, res) => {
     try {
@@ -73,7 +74,7 @@ export const login = async (req, res) => {
     try {
         const { emailAddress, password } = req.body;
 
-        const user = await User.findOne({ emailAddress }).select('+password');
+        const user = await User.findOne({ emailAddress }).select('+password +tokenVersion');
         if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
         if (user.status === 'Inactive') {
@@ -85,19 +86,8 @@ export const login = async (req, res) => {
 
         await User.updateOne({ _id: user._id }, { $set: { lastLogin: new Date() } });
 
-        const token = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '1d' }
-        );
+        issueSession(res, user);
 
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-            maxAge: 24 * 60 * 60 * 1000 // 1 day
-        });
-        
         const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
         res.status(200).json({ message: "Login successful", user: populatedUser });
     } catch (error) {
@@ -106,25 +96,31 @@ export const login = async (req, res) => {
     }
 };
 
+// Not behind protectRoute, so an expired session can still log out. Revoking bumps tokenVersion,
+// which ends every session of the account: a copied cookie stops working too.
 export const logout = async (req, res) => {
-    if (req.dbUser?._id) {
-        await delCache(`session:user:${req.dbUser._id}`);
+    const token = req.cookies?.token;
+    if (token) {
+        try {
+            // verify, not decode: a forged cookie must not be able to log someone else out
+            const { userId } = jwt.verify(token, process.env.JWT_SECRET);
+            await revokeSessions(userId);
+        } catch (error) {
+            logger.info(`Logout without a valid session: ${error.message}`);
+        }
     }
-    res.clearCookie('token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
-    });
+    res.clearCookie('token', authCookieOptions());
     res.status(200).json({ message: "Logged out successfully" });
 };
 
 export const checkAuth = async (req, res) => {
     try {
-        // req.dbUser is already populated by your protectRoute middleware!
-        // We just return it to the frontend to update Zustand
+        // req.dbUser is already populated by protectRoute; tokenVersion stays server-side
+        const user = { ...req.dbUser };
+        delete user.tokenVersion;
         res.status(200).json({
             authenticated: true,
-            user: req.dbUser
+            user
         });
     } catch (error) {
         res.status(500).json({ message: "Error checking auth status" });
@@ -174,8 +170,8 @@ export const updateUserRole = async (req, res) => {
         targetUser.role = requestedRole._id;
         await targetUser.save();
 
-        // Invalidate session cache for the updated user
-        await delCache(`session:user:${userId}`);
+        // New permissions start from a fresh sign-in (also clears the cached session)
+        await revokeSessions(userId);
 
         res.status(200).json({ message: "User role updated successfully" });
     } catch (error) {
@@ -209,8 +205,12 @@ export const updateUserStatus = async (req, res) => {
         targetUser.status = status;
         await targetUser.save();
 
-        // Invalidate session cache for the updated user
-        await delCache(`session:user:${userId}`);
+        if (status === 'Inactive') {
+            // Kill existing tokens and live sockets, so reactivation doesn't revive old sessions
+            await revokeSessions(userId);
+        } else {
+            await delCache(`session:user:${userId}`);
+        }
 
         res.status(200).json({ message: `User status updated to ${status}` });
     } catch (error) {
@@ -235,9 +235,15 @@ export const updateProfile = async (req, res) => {
         }
 
         await user.save();
-        
+
         // Invalidate session cache for the user
         await delCache(`session:user:${user._id}`);
+
+        if (password) {
+            // A new password ends every other session; this one continues with a fresh cookie
+            const tokenVersion = await revokeSessions(user._id);
+            issueSession(res, { _id: user._id, tokenVersion });
+        }
 
         const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
         res.status(200).json({ message: "Profile updated successfully", user: populatedUser });

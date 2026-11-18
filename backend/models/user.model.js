@@ -78,6 +78,13 @@ const userSchema = new mongoose.Schema({
 
     lastLogin: {
         type: Date
+    },
+
+    // Embedded in every JWT; bumping it revokes all tokens issued before (logout, password change, ...)
+    tokenVersion: {
+        type: Number,
+        default: 0,
+        select: false
     }
 
 }, {

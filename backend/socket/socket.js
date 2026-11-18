@@ -42,10 +42,14 @@ export const initSocket = (server) => {
 
             // 5. Fetch user using the decoded ID (handling common payload structures)
             const userId = decoded.id || decoded.userId || decoded._id;
-            const user = await User.findById(userId).populate('role');
+            const user = await User.findById(userId).select('-password +tokenVersion').populate('role');
 
             if (!user) {
                 return next(new Error("Authentication error: User not found in database"));
+            }
+
+            if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+                return next(new Error("Authentication error: Session revoked"));
             }
 
             // X-03 FIX: Block deactivated users from maintaining WebSocket connections
@@ -64,6 +68,9 @@ export const initSocket = (server) => {
 
     io.on("connection", (socket) => {
         logger.info(`🔌 Secure Socket Connected: ${socket.dbUser.fullName} (${socket.id})`);
+
+        // Personal room, so revoking a user's sessions can also drop their live connections.
+        socket.join(`user:${socket.dbUser._id}`);
 
         socket.on("join-project", async (projectId) => {
             try {
@@ -120,6 +127,11 @@ export const initSocket = (server) => {
     });
 
     return io;
+};
+
+/** Disconnects every live socket of a user (after their sessions were revoked). */
+export const disconnectUser = (userId) => {
+    io?.in(`user:${userId}`).disconnectSockets(true);
 };
 
 export const getIO = () => {
