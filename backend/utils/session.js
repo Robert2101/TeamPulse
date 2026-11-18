@@ -47,3 +47,16 @@ export const revokeSessions = async (userId) => {
     disconnectUser(userId);
     return user?.tokenVersion ?? 0;
 };
+
+// What the client may see about the signed-in user: never tokenVersion, and the workspace
+// invite code only for Admins (they're the ones who share it).
+export const toClientUser = (user) => {
+    const plain = typeof user?.toObject === 'function' ? user.toObject() : { ...user };
+    delete plain.tokenVersion;
+    delete plain.password;
+    if (plain.role?.roleName !== 'Admin' && plain.workspace?.inviteCode) {
+        plain.workspace = { ...plain.workspace };
+        delete plain.workspace.inviteCode;
+    }
+    return plain;
+};
