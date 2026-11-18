@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
@@ -33,8 +34,20 @@ app.use(express.json());
 app.use(cookieParser()); // Populates req.cookies
 app.use(csrfProtection);
 app.use(morgan(':method :url :status - :response-time ms', {
-    stream: { write: (message) => logger.info(message.trim()) }
+    stream: { write: (message) => logger.info(message.trim()) },
+    skip: (req) => req.path === '/api/health',
 }));
+
+// Health check for the Docker HEALTHCHECK, hosting platforms and uptime monitors: no auth, no rate limit.
+const DB_STATES = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+app.get('/api/health', (req, res) => {
+    const connected = mongoose.connection.readyState === 1;
+    res.status(connected ? 200 : 503).json({
+        status: connected ? 'ok' : 'unavailable',
+        database: DB_STATES[mongoose.connection.readyState] ?? 'unknown',
+        uptime: Math.round(process.uptime()),
+    });
+});
 
 // API Routes
 app.use('/api/auth', authRoutes);
