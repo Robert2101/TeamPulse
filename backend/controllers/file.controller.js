@@ -9,6 +9,21 @@ import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
 import { canAccessProject } from '../utils/projectAccess.js';
 
+const PROJECT_SCOPED = ['Task', 'Comment', 'Project'];
+
+// The project a Task, Comment or Project file belongs to, looked up inside the caller's workspace.
+const findOwningProject = async (entityType, entityId, workspace) => {
+    let projectId = entityId;
+    if (entityType === 'Task') {
+        const task = await Task.findOne({ _id: entityId, workspace }).select('projectReference').lean();
+        projectId = task?.projectReference;
+    } else if (entityType === 'Comment') {
+        const comment = await Comment.findOne({ _id: entityId, workspace }).select('task').lean();
+        const task = comment && await Task.findOne({ _id: comment.task, workspace }).select('projectReference').lean();
+        projectId = task?.projectReference;
+    }
+    return projectId ? Project.findOne({ _id: projectId, workspace }).lean() : null;
+};
 
 export const uploadFile = async (req, res) => {
     try {
@@ -19,27 +34,20 @@ export const uploadFile = async (req, res) => {
         if (!["Task", "Comment", "User", "Project"].includes(entityType)) return res.status(400).json({ message: "Invalid entityType." });
 
         let finalEntityId = entityId;
+        let projectIdToBroadcast = null;
 
         if (entityType === 'User') {
             finalEntityId = req.dbUser._id.toString(); // IDOR FIX: Users can only upload their own profile pic
-        } else if (entityType === 'Project') {
-            const project = await Project.findOne({ _id: entityId, workspace: req.dbUser.workspace });
+        } else {
+            // Task and comment attachments need the same project access as the project itself.
+            const project = await findOwningProject(entityType, entityId, req.dbUser.workspace);
             if (!project) {
-                return res.status(404).json({ message: "Target project not found in your workspace." });
+                return res.status(404).json({ message: `Target ${entityType.toLowerCase()} not found in your workspace.` });
             }
             if (!canAccessProject(project, req.dbUser)) {
                 return res.status(403).json({ message: "Access Denied. You cannot upload files to this project." });
             }
-        } else if (entityType === 'Task') {
-            const task = await Task.findOne({ _id: entityId, workspace: req.dbUser.workspace });
-            if (!task) {
-                return res.status(404).json({ message: "Target task not found in your workspace." });
-            }
-        } else if (entityType === 'Comment') {
-            const comment = await Comment.findOne({ _id: entityId, workspace: req.dbUser.workspace });
-            if (!comment) {
-                return res.status(404).json({ message: "Target comment not found in your workspace." });
-            }
+            projectIdToBroadcast = project._id;
         }
 
         const uploadResult = await new Promise((resolve, reject) => {
@@ -63,17 +71,12 @@ export const uploadFile = async (req, res) => {
             entityId: finalEntityId,
         });
 
-        let projectIdToBroadcast = null;
-
         if (entityType === 'Task') {
-            const task = await Task.findByIdAndUpdate(finalEntityId, { $push: { attachments: fileAsset._id } });
-            if (task) projectIdToBroadcast = task.projectReference;
+            await Task.updateOne({ _id: finalEntityId }, { $push: { attachments: fileAsset._id } });
         } else if (entityType === 'Comment') {
-            const comment = await Comment.findByIdAndUpdate(finalEntityId, { $push: { attachments: fileAsset._id } }).populate('task');
-            if (comment && comment.task) projectIdToBroadcast = comment.task.projectReference;
+            await Comment.updateOne({ _id: finalEntityId }, { $push: { attachments: fileAsset._id } });
         } else if (entityType === 'Project') {
-            await Project.findByIdAndUpdate(finalEntityId, { $push: { assets: fileAsset._id } });
-            projectIdToBroadcast = finalEntityId;
+            await Project.updateOne({ _id: finalEntityId }, { $push: { assets: fileAsset._id } });
         } else if (entityType === 'User') {
             await User.findByIdAndUpdate(finalEntityId, { profilePicture: uploadResult.secure_url });
         }
@@ -99,20 +102,9 @@ export const getFilesByEntity = async (req, res) => {
         const { entityType, entityId } = req.query;
         if (!entityType || !entityId) return res.status(400).json({ message: "entityType and entityId are required." });
 
-        // RBAC FIX: Determine project access before serving files
-        let projectIdToCheck = null;
-        if (entityType === 'Project') {
-            projectIdToCheck = entityId;
-        } else if (entityType === 'Task') {
-            const task = await Task.findById(entityId);
-            if (task) projectIdToCheck = task.projectReference;
-        } else if (entityType === 'Comment') {
-            const comment = await Comment.findById(entityId).populate('task');
-            if (comment && comment.task) projectIdToCheck = comment.task.projectReference;
-        }
-
-        if (projectIdToCheck) {
-            const project = await Project.findById(projectIdToCheck);
+        // RBAC: project files are visible only to people with access to that project
+        if (PROJECT_SCOPED.includes(entityType)) {
+            const project = await findOwningProject(entityType, entityId, req.dbUser.workspace);
             if (project && !canAccessProject(project, req.dbUser)) {
                 return res.status(403).json({ message: "Access Denied." });
             }
