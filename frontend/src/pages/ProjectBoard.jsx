@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
-import { ArrowLeft, Calendar, Lock, RotateCw } from "lucide-react";
+import { ArrowLeft, Calendar, Lock, RotateCw, Search, MessageSquare, Paperclip } from "lucide-react";
 
 import api from "../lib/axios";
 import { useSocket } from "../hooks/useSocket";
@@ -13,7 +13,7 @@ import { PriorityBadge, ProjectStatusBadge } from "../components/ui/badges";
 import { TASK_STATUS_DOT } from "../lib/taskMeta";
 import { formatDate, isOverdue, errorMessage } from "../lib/format";
 import { toast } from "../lib/toast";
-import { btn } from "../lib/styles";
+import { btn, field } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { gsap, Flip, prefersReducedMotion } from "../lib/motion";
 
@@ -61,6 +61,8 @@ export const ProjectBoard = () => {
     const closeTask = useCallback(() => setTaskParam(null), [setTaskParam]);
     const [activeTab, setActiveTab] = useState("kanban"); // "kanban" | "assets"
     const [dragOverColumn, setDragOverColumn] = useState(null);
+    const [query, setQuery] = useState("");
+    const [onlyMine, setOnlyMine] = useState(false);
 
     // FLIP: snapshot card positions right before tasks change, then animate from there after React re-renders.
     const boardRef = useRef(null);
@@ -136,15 +138,26 @@ export const ProjectBoard = () => {
             setTaskParam(null, taskId); // close the panel if it showed the deleted task
         };
 
-        socket.on("task-updated", onUpdated);
-        socket.on("task-created", onCreated);
-        socket.on("task-deleted", onDeleted);
-
-        return () => {
-            socket.off("task-updated", onUpdated);
-            socket.off("task-created", onCreated);
-            socket.off("task-deleted", onDeleted);
+        // Keep the discussion and attachment counts on cards live.
+        const editIds = (taskId, key, edit) => setTasks(prev => prev.map(t => (t._id === taskId ? { ...t, [key]: edit((t[key] || []).map(idOf)) } : t)));
+        const onComment = ({ taskId, comment }) => editIds(taskId, "comments", (ids) => (ids.includes(comment._id) ? ids : [...ids, comment._id]));
+        const onCommentDeleted = (commentId) => setTasks(prev => prev.map(t => (
+            (t.comments || []).some(c => idOf(c) === commentId) ? { ...t, comments: t.comments.filter(c => idOf(c) !== commentId) } : t
+        )));
+        const onFile = ({ entityType, entityId, file }) => {
+            if (entityType === "Task") editIds(idOf(entityId), "attachments", (ids) => (ids.includes(file._id) ? ids : [...ids, file._id]));
         };
+        const onFileDeleted = ({ entityType, entityId, fileId }) => {
+            if (entityType === "Task") editIds(idOf(entityId), "attachments", (ids) => ids.filter(fid => fid !== fileId));
+        };
+
+        const handlers = {
+            "task-updated": onUpdated, "task-created": onCreated, "task-deleted": onDeleted,
+            "new-comment": onComment, "comment-deleted": onCommentDeleted,
+            "file-uploaded": onFile, "file-deleted": onFileDeleted,
+        };
+        Object.entries(handlers).forEach(([event, handler]) => socket.on(event, handler));
+        return () => Object.entries(handlers).forEach(([event, handler]) => socket.off(event, handler));
     }, [socket, mergeTask, captureLayout, setTaskParam]);
 
     // A link to a task that is gone (deleted, or never on this board) closes with an explanation.
@@ -235,6 +248,13 @@ export const ProjectBoard = () => {
 
     const selectedTask = tasks.find(t => t._id === selectedTaskId) || null;
 
+    const needle = query.trim().toLowerCase();
+    const filtering = Boolean(needle) || onlyMine;
+    const visibleTasks = tasks.filter(t =>
+        (!onlyMine || idOf(t.assignee) === idOf(user?._id)) &&
+        (!needle || t.taskName.toLowerCase().includes(needle) || (t.taskDescription || "").toLowerCase().includes(needle))
+    );
+
     return (
         <div className="relative flex flex-col">
             {/* Board Header */}
@@ -296,6 +316,45 @@ export const ProjectBoard = () => {
                 </p>
             )}
 
+            {activeTab === "kanban" && tasks.length > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <label className="relative min-w-48 flex-1 sm:max-w-xs">
+                        <span className="sr-only">Filter tasks</span>
+                        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
+                        <input
+                            type="search"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
+                            placeholder="Filter by title or description"
+                            className={cn(field, "h-9 pl-9")}
+                        />
+                    </label>
+                    <div role="group" aria-label="Whose tasks to show" className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                        {[["Everyone", false], ["Mine", true]].map(([text, mine]) => (
+                            <button
+                                key={text}
+                                type="button"
+                                aria-pressed={onlyMine === mine}
+                                onClick={() => setOnlyMine(mine)}
+                                className={cn(
+                                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                                    onlyMine === mine ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                                )}
+                            >
+                                {text}
+                            </button>
+                        ))}
+                    </div>
+                    {filtering && (
+                        <p className="flex items-center gap-2 text-sm text-gray-600" aria-live="polite">
+                            <span className="tabular">{visibleTasks.length} of {tasks.length}</span>
+                            <button type="button" onClick={() => { setQuery(""); setOnlyMine(false); }} className="font-medium text-indigo-700 underline-offset-4 hover:underline">Clear</button>
+                        </p>
+                    )}
+                </div>
+            )}
+
             {/* Tab Content */}
             {activeTab === "assets" ? (
                 <Suspense fallback={<div className="h-64 animate-pulse rounded-2xl bg-gray-100" role="status" aria-label="Loading files" />}>
@@ -304,7 +363,7 @@ export const ProjectBoard = () => {
             ) : (
                 <div ref={boardRef} className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 md:mx-0 md:snap-none md:px-0">
                     {COLUMNS.map((status) => {
-                        const columnTasks = tasks.filter(task => task.taskStatus === status);
+                        const columnTasks = visibleTasks.filter(task => task.taskStatus === status);
                         const isTarget = dragOverColumn === status;
 
                         return (
@@ -333,6 +392,8 @@ export const ProjectBoard = () => {
                                     {columnTasks.map((task) => {
                                         const overdue = isOverdue(task.dueDate, task.taskStatus);
                                         const assignee = typeof task.assignee === "object" ? task.assignee : null;
+                                        const commentCount = task.comments?.length || 0;
+                                        const fileCount = task.attachments?.length || 0;
                                         return (
                                             <li
                                                 key={task._id}
@@ -346,7 +407,7 @@ export const ProjectBoard = () => {
                                                     tabIndex={0}
                                                     onClick={() => openTask(task._id)}
                                                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTask(task._id); } }}
-                                                    aria-label={`${task.taskName}. ${task.priority} priority${task.dueDate ? `, due ${formatDate(task.dueDate)}` : ""}. Open details`}
+                                                    aria-label={`${task.taskName}. ${task.priority} priority${task.dueDate ? `, due ${formatDate(task.dueDate)}` : ""}${commentCount ? `, ${commentCount} comment${commentCount === 1 ? "" : "s"}` : ""}. Open details`}
                                                     className={cn(
                                                         "group rounded-xl border border-gray-200 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-[border-color,box-shadow] duration-150 hover:border-gray-300 hover:shadow-[0_4px_12px_-4px_rgba(15,23,42,0.12)]",
                                                         canMoveTasks ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
@@ -357,11 +418,27 @@ export const ProjectBoard = () => {
                                                         {assignee && <Avatar name={assignee.fullName} src={assignee.profilePicture} size="xs" />}
                                                     </div>
                                                     <h3 className="line-clamp-3 text-sm font-medium leading-snug text-gray-900 wrap-anywhere">{task.taskName}</h3>
-                                                    {task.dueDate && (
-                                                        <p className={cn("mt-2.5 flex items-center gap-1.5 text-xs", overdue ? "font-medium text-red-700" : "text-gray-600")}>
-                                                            <Calendar size={13} aria-hidden="true" />
-                                                            {overdue ? "Overdue · " : ""}{formatDate(task.dueDate, { short: true })}
-                                                        </p>
+                                                    {(task.dueDate || commentCount > 0 || fileCount > 0) && (
+                                                        <div className="mt-2.5 flex items-center gap-3 text-xs text-gray-600">
+                                                            {task.dueDate && (
+                                                                <span className={cn("flex items-center gap-1.5", overdue && "font-medium text-red-700")}>
+                                                                    <Calendar size={13} aria-hidden="true" />
+                                                                    {overdue ? "Overdue · " : ""}{formatDate(task.dueDate, { short: true })}
+                                                                </span>
+                                                            )}
+                                                            <span className="ml-auto flex items-center gap-2.5">
+                                                                {commentCount > 0 && (
+                                                                    <span className="tabular flex items-center gap-1" title={`${commentCount} comment${commentCount === 1 ? "" : "s"}`}>
+                                                                        <MessageSquare size={13} aria-hidden="true" />{commentCount}
+                                                                    </span>
+                                                                )}
+                                                                {fileCount > 0 && (
+                                                                    <span className="tabular flex items-center gap-1" title={`${fileCount} attachment${fileCount === 1 ? "" : "s"}`}>
+                                                                        <Paperclip size={13} aria-hidden="true" />{fileCount}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </li>
@@ -372,7 +449,7 @@ export const ProjectBoard = () => {
                                             "pointer-events-none flex flex-1 items-center justify-center rounded-xl border border-dashed p-4 text-center text-sm",
                                             isTarget ? "border-indigo-300 text-indigo-700" : "border-gray-300 text-gray-600"
                                         )}>
-                                            {canMoveTasks ? "Drop tasks here" : "No tasks"}
+                                            {filtering ? "No matching tasks" : canMoveTasks ? "Drop tasks here" : "No tasks"}
                                         </li>
                                     )}
                                 </ul>
