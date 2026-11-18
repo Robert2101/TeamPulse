@@ -29,7 +29,7 @@ export const TaskDescription = ({ task, canEdit = false, onTaskUpdated }) => {
             <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-gray-900">Description</h3>
                 {canEdit && draft === null && (
-                    <button type="button" onClick={() => setDraft(task.taskDescription || "")} className={cn(btn.ghost, "-my-1.5 px-2 py-1 text-xs")}>
+                    <button type="button" aria-label="Edit description" onClick={() => setDraft(task.taskDescription || "")} className={cn(btn.ghost, "-my-1.5 px-2 py-1 text-xs")}>
                         <Pencil size={13} aria-hidden="true" /> Edit
                     </button>
                 )}
