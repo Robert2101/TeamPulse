@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
-import { Menu } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { Sidebar } from "./Sidebar";
+import { CommandPalette } from "./CommandPalette";
+import { DemoSwitcher } from "./DemoSwitcher";
 import { useLocation, Outlet, Link } from "react-router-dom";
 import { useStore } from "../store/useStore";
+import { useHotkeys } from "../hooks/useHotkeys";
+import { useProjectPulse } from "../hooks/useProjectPulse";
 import api from "../lib/axios";
 import { btn } from "../lib/styles";
 import { cn } from "../lib/utils";
@@ -21,10 +25,14 @@ const readCollapsed = () => {
 };
 
 export const DashboardLayout = ({ children }) => {
-    const { user, projects, setProjects, projectsLoaded } = useStore();
+    const { user, projects, setProjects, projectsLoaded, commandOpen, setCommandOpen, sessionKey } = useStore();
     const [isCollapsed, setIsCollapsed] = useState(readCollapsed);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const location = useLocation();
+    useProjectPulse();
+
+    // ⌘K / Ctrl+K toggles the command palette from anywhere, even while typing.
+    useHotkeys({ "mod+k": () => setCommandOpen(!commandOpen) });
 
     useEffect(() => {
         if (projectsLoaded) return;
@@ -122,15 +130,23 @@ export const DashboardLayout = ({ children }) => {
                             <li className="min-w-0 truncate font-medium text-gray-900" aria-current="page">{crumb}</li>
                         </ol>
                     </nav>
+                    <div className="flex shrink-0 items-center gap-2">
+                        <button onClick={() => setCommandOpen(true)} className={cn(btn.icon, "md:hidden")} aria-label="Search">
+                            <Search size={18} />
+                        </button>
+                        <DemoSwitcher />
+                    </div>
                 </header>
 
                 {/* Scrollable Content Area */}
                 <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto focus:outline-none">
-                    <div className="px-4 py-6 md:px-8 md:py-8">
+                    {/* Keyed by session so pages remount and refetch when a demo visitor switches persona */}
+                    <div key={sessionKey} className="px-4 py-6 md:px-8 md:py-8">
                         {children || <Outlet />}
                     </div>
                 </main>
             </div>
+            <CommandPalette />
         </div>
     );
 };
