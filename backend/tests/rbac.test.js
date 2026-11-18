@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { seed } from './fixtures.js';
 import { signIn } from './helpers.js';
 import Task from '../models/task.model.js';
+import Project from '../models/project.model.js';
 
 describe('role-based access', () => {
     let f;
@@ -57,6 +58,41 @@ describe('role-based access', () => {
         expect(task.priority).toBe('Medium');
         expect(task.workspace.toString()).toBe(f.acme._id.toString());
         expect(task.createdBy.toString()).toBe(f.users.pm._id.toString());
+    });
+
+    it('ignores update operators smuggled into the body', async () => {
+        const max = await signIn('member@acme.test');
+        await max.patch(`/api/tasks/${f.task._id}`).send({
+            taskStatus: 'Review',
+            $set: { taskName: 'Renamed', workspace: f.beta._id },
+        });
+        const task = await Task.findById(f.task._id);
+        expect(task.taskStatus).toBe('Review');
+        expect(task.taskName).toBe('Write copy');
+        expect(task.workspace.toString()).toBe(f.acme._id.toString());
+
+        const pm = await signIn('pm@acme.test');
+        const res = await pm.put(`/api/projects/${f.project._id}`).send({
+            projectStatus: 'Active',
+            $set: { workspace: f.beta._id, projectManager: f.users.betaAdmin._id },
+        });
+        expect(res.status).toBe(200);
+        const project = await Project.findById(f.project._id);
+        expect(project.projectStatus).toBe('Active');
+        expect(project.workspace.toString()).toBe(f.acme._id.toString());
+        expect(project.projectManager.toString()).toBe(f.users.pm._id.toString());
+    });
+
+    it('only lets Admins reassign a project to a manager in their workspace', async () => {
+        const pm = await signIn('pm@acme.test');
+        await pm.put(`/api/projects/${f.project._id}`).send({ projectManager: f.users.member._id });
+        expect((await Project.findById(f.project._id)).projectManager.toString()).toBe(f.users.pm._id.toString());
+
+        const admin = await signIn('admin@acme.test');
+        const foreign = await admin.put(`/api/projects/${f.project._id}`).send({ projectManager: f.users.betaAdmin._id });
+        expect(foreign.status).toBe(400);
+        const local = await admin.put(`/api/projects/${f.project._id}`).send({ projectManager: f.users.member._id });
+        expect(local.status).toBe(200);
     });
 
     it('hides the budget from non-managers', async () => {
