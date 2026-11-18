@@ -102,20 +102,21 @@ export const initSocket = (server) => {
             logger.info(`Socket ${socket.id} left Project Room: ${projectId}`);
         });
 
-        // Typing Indicators
-        socket.on("typing", (data) => {
-            // data ideally has { projectId, taskId, userName }
-            if (data.projectId) {
-                socket.to(data.projectId).emit("user-typing", data);
-            }
-        });
+        // Typing indicators: relay only into rooms this socket was authorized to join (join-project),
+        // and take the name from the verified session rather than the client payload.
+        const relayTyping = (event) => (data) => {
+            const projectId = data?.projectId?.toString();
+            if (!projectId || !socket.rooms.has(projectId)) return;
+            socket.to(projectId).emit(event, {
+                projectId,
+                taskId: data.taskId,
+                userId: socket.dbUser._id.toString(),
+                userName: socket.dbUser.fullName,
+            });
+        };
 
-        socket.on("stop-typing", (data) => {
-            // data ideally has { projectId, taskId, userName }
-            if (data.projectId) {
-                socket.to(data.projectId).emit("user-stop-typing", data);
-            }
-        });
+        socket.on("typing", relayTyping("user-typing"));
+        socket.on("stop-typing", relayTyping("user-stop-typing"));
 
         socket.on("disconnect", () => {
             logger.info(`Socket Disconnected: ${socket.dbUser.fullName} (${socket.id})`);
