@@ -33,7 +33,8 @@ app.use(requireJsonBody);
 app.use(express.json());
 app.use(cookieParser()); // Populates req.cookies
 app.use(csrfProtection);
-app.use(morgan(':method :url :status - :response-time ms', {
+// :remote-addr is req.ip, so the log shows whether TRUST_PROXY resolves the real client behind the proxies.
+app.use(morgan(':remote-addr :method :url :status - :response-time ms', {
     stream: { write: (message) => logger.info(message.trim()) },
     skip: (req) => req.path === '/api/health',
 }));
