@@ -30,7 +30,7 @@ describe('session revocation', () => {
 
         const res = await laptop.put('/api/auth/profile').send({ password: 'a-new-password' });
         expect(res.status).toBe(200);
-        const renewed = asSession({ ...laptop, cookie: cookieFrom(res) });
+        const renewed = asSession({ cookie: cookieFrom(res), csrfToken: res.body.csrfToken });
 
         expect((await renewed.get('/api/auth/check-auth')).status).toBe(200);
         expect((await phone.get('/api/auth/check-auth')).status).toBe(401);

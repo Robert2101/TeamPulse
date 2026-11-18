@@ -7,6 +7,7 @@ import logger from '../utils/logger.js';
 import mongoose from 'mongoose';
 import { delCache } from '../config/redis.js';
 import { authCookieOptions, issueSession, revokeSessions } from '../utils/session.js';
+import { csrfTokenFor } from '../middleware/csrf.middleware.js';
 
 export const signup = async (req, res) => {
     try {
@@ -89,7 +90,7 @@ export const login = async (req, res) => {
         issueSession(res, user);
 
         const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
-        res.status(200).json({ message: "Login successful", user: populatedUser });
+        res.status(200).json({ message: "Login successful", user: populatedUser, csrfToken: csrfTokenFor(user._id, user.tokenVersion) });
     } catch (error) {
         logger.error(`Login Error Detail: ${error.message}`);
         res.status(500).json({ message: "Server error during login" });
@@ -120,7 +121,8 @@ export const checkAuth = async (req, res) => {
         delete user.tokenVersion;
         res.status(200).json({
             authenticated: true,
-            user
+            user,
+            csrfToken: csrfTokenFor(req.dbUser._id, req.dbUser.tokenVersion)
         });
     } catch (error) {
         res.status(500).json({ message: "Error checking auth status" });
@@ -239,14 +241,15 @@ export const updateProfile = async (req, res) => {
         // Invalidate session cache for the user
         await delCache(`session:user:${user._id}`);
 
+        let tokenVersion = req.dbUser.tokenVersion;
         if (password) {
             // A new password ends every other session; this one continues with a fresh cookie
-            const tokenVersion = await revokeSessions(user._id);
+            tokenVersion = await revokeSessions(user._id);
             issueSession(res, { _id: user._id, tokenVersion });
         }
 
         const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
-        res.status(200).json({ message: "Profile updated successfully", user: populatedUser });
+        res.status(200).json({ message: "Profile updated successfully", user: populatedUser, csrfToken: csrfTokenFor(user._id, tokenVersion) });
     } catch (error) {
         logger.error(`Update Profile Error: ${error.message}`);
         res.status(500).json({ message: "Failed to update profile" });

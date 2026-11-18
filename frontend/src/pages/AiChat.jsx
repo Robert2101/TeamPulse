@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, Sparkles, Loader2 } from "lucide-react";
 import api from "../lib/axios";
+import { csrfHeaders } from "../lib/csrf";
 import { useStore } from "../store/useStore";
 import { Avatar } from "../components/ui/avatar";
 import { cn } from "../lib/utils";
@@ -79,7 +80,7 @@ export const AiChat = () => {
         try {
             const response = await fetch(ASK_URL, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...csrfHeaders() },
                 credentials: "include", // auth cookie identifies req.dbUser
                 body: JSON.stringify({ query: userText }),
             });
