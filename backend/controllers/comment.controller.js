@@ -43,7 +43,7 @@ export const addComment = async (req, res) => {
             comment: savedComment
         });
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Added Comment', 'Comment', savedComment._id, { taskId });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Added Comment', 'Comment', savedComment._id, { taskId, projectId: project._id.toString() });
 
         res.status(201).json({ message: "Comment added", comment: savedComment });
 
@@ -106,9 +106,12 @@ export const editComment = async (req, res) => {
         updatedComment = await updatedComment.populate('author', 'fullName profilePicture');
         updatedComment = await updatedComment.populate('attachments');
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Edited Comment', 'Comment', updatedComment._id, { taskId: comment.task });
-
         const taskObj = await Task.findById(comment.task);
+        const projectId = taskObj?.projectReference?.toString();
+
+        // projectId lets logActivity clear that project's cached audit log
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Edited Comment', 'Comment', updatedComment._id, { taskId: comment.task, projectId });
+
         if (taskObj) {
             getIO().to(taskObj.projectReference.toString()).emit('comment-edited', updatedComment);
         }
@@ -138,7 +141,7 @@ export const deleteComment = async (req, res) => {
 
         await Task.findByIdAndUpdate(comment.task, { $pull: { comments: id } });
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Comment', 'Comment', id, { taskId: comment.task });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Comment', 'Comment', id, { taskId: comment.task, projectId: taskObj?.projectReference?.toString() });
 
         if (taskObj) {
             getIO().to(taskObj.projectReference.toString()).emit('comment-deleted', id);
