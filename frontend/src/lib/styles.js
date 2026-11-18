@@ -1,5 +1,6 @@
 // Shared class recipes so every screen uses the same button and field vocabulary.
-const press = "transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-50";
+// Every pressable answers the press: a quick 3% scale on a strong ease-out.
+const press = "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-snappy active:scale-97 disabled:pointer-events-none disabled:opacity-50";
 
 export const btn = {
     primary: `inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(49,46,129,0.25)] hover:bg-indigo-700 ${press}`,

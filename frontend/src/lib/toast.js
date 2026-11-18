@@ -1,20 +1,10 @@
-import { create } from "zustand";
+import { toast as sonner } from "sonner";
 
-let nextId = 1;
-
-export const useToastStore = create((set) => ({
-    toasts: [],
-    push: (toast) => {
-        const id = nextId++;
-        set((state) => ({ toasts: [...state.toasts.slice(-3), { id, tone: "info", ...toast }] }));
-        setTimeout(() => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })), toast.duration ?? 5000);
-        return id;
-    },
-    dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
-}));
-
+// App-wide toast API (title + optional description). Rendered by <Toaster /> in components/ui/toaster.
 export const toast = {
-    success: (title, description) => useToastStore.getState().push({ tone: "success", title, description }),
-    error: (title, description) => useToastStore.getState().push({ tone: "error", title, description, duration: 7000 }),
-    info: (title, description) => useToastStore.getState().push({ tone: "info", title, description }),
+    success: (title, description) => sonner.success(title, { description }),
+    error: (title, description) => sonner.error(title, { description, duration: 7000 }),
+    info: (title, description) => sonner.info(title, { description }),
+    promise: (promise, messages) => sonner.promise(promise, messages),
+    dismiss: (id) => sonner.dismiss(id),
 };
