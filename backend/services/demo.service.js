@@ -68,9 +68,12 @@ export const buildWorkspace = async ({ now = new Date(), sandbox = true, passwor
     const comments = [];
     const files = [];
     const activities = [];
-    const log = (who, action, entityType, entityId, hoursAgo, metadata = {}) => activities.push({
-        user: userId[who], workspace: workspaceId, action, entityType, entityId, metadata, createdAt: at(hoursAgo),
-    });
+    const lastTouched = new Map(); // task id -> hours ago of its latest event, used as updatedAt
+    const log = (who, action, entityType, entityId, hoursAgo, metadata = {}) => {
+        activities.push({ user: userId[who], workspace: workspaceId, action, entityType, entityId, metadata, createdAt: at(hoursAgo) });
+        const taskId = metadata.taskId?.toString() ?? (entityType === 'Task' ? entityId.toString() : null);
+        if (taskId) lastTouched.set(taskId, Math.min(lastTouched.get(taskId) ?? Infinity, hoursAgo));
+    };
     const fileDoc = (key, who, hoursAgo, entityType, entityId) => {
         const file = FILES[key];
         const doc = {
@@ -144,6 +147,8 @@ export const buildWorkspace = async ({ now = new Date(), sandbox = true, passwor
             });
         });
     }
+
+    for (const task of tasks) task.updatedAt = at(lastTouched.get(task._id.toString()) ?? 0);
 
     const chats = Object.entries(CHATS).flatMap(([who, exchanges]) => exchanges.map((c) => ({
         user: userId[who], query: c.query, responseGenerated: c.reply, classifiedIntent: c.intent, createdAt: at(c.h),
