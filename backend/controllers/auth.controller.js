@@ -9,6 +9,7 @@ import { delCache } from '../config/redis.js';
 import { authCookieOptions, issueSession, revokeSessions, toClientUser } from '../utils/session.js';
 import { csrfTokenFor } from '../middleware/csrf.middleware.js';
 import { withTransaction } from '../utils/transaction.js';
+import { purgeSandbox } from '../services/demo.service.js';
 
 export const signup = async (req, res) => {
     try {
@@ -118,6 +119,9 @@ export const logout = async (req, res) => {
             // verify, not decode: a forged cookie must not be able to log someone else out
             const { userId } = jwt.verify(token, process.env.JWT_SECRET);
             await revokeSessions(userId);
+            // Leaving a demo discards its private workspace instead of keeping it until it expires.
+            const user = await User.findById(userId).select('workspace').populate('workspace', 'isDemo');
+            if (user?.workspace?.isDemo) await purgeSandbox(user.workspace._id);
         } catch (error) {
             logger.info(`Logout without a valid session: ${error.message}`);
         }
