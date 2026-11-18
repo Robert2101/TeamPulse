@@ -5,6 +5,7 @@ import Task from '../models/task.model.js';
 import Comment from '../models/comment.model.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getCache, setCache, delCache, delWorkspaceCacheKeys } from '../config/redis.js';
+import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 
 export const createProject = async (req, res) => {
     try {
@@ -104,7 +105,7 @@ export const getAllProjects = async (req, res) => {
 
         // RBAC: Hide budget from regular team members/stakeholders
         const sanitizedProjects = projects.map(p => {
-            if (!isAdmin && p.projectManager._id.toString() !== req.dbUser._id.toString()) {
+            if (!canManageProject(p, req.dbUser)) {
                 delete p.budget;
             }
             return p;
@@ -131,10 +132,7 @@ export const updateProject = async (req, res) => {
             return res.status(404).json({ message: "Project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-
-        if (!isAdmin && !isManager) {
+        if (!canManageProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to update Project ${id} without authorization.`);
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can update this project." });
         }
@@ -145,7 +143,7 @@ export const updateProject = async (req, res) => {
         delete updateData.workspace;
         delete updateData.createdBy;
         delete updateData.createdAt;
-        if (!isAdmin) {
+        if (req.dbUser.role.roleName !== 'Admin') {
             delete updateData.projectManager; // Only admins can reassign PM
         }
 
@@ -205,10 +203,7 @@ export const deleteProject = async (req, res) => {
             return res.status(404).json({ message: "Project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-
-        if (!isAdmin && !isManager) {
+        if (!canManageProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to delete Project ${id} without authorization.`);
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can delete this project." });
         }
@@ -257,15 +252,9 @@ export const getProjectById = async (req, res) => {
             return res.status(404).json({ message: "Project not found in your workspace." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const pmId = project.projectManager ? (project.projectManager._id ? project.projectManager._id.toString() : project.projectManager.toString()) : null;
-        const isManager = pmId === req.dbUser._id.toString();
-        const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(member => {
-            const memberId = typeof member === 'object' ? member._id.toString() : member.toString();
-            return memberId === req.dbUser._id.toString();
-        });
+        const isManager = canManageProject(project, req.dbUser);
 
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             return res.status(403).json({ message: "Access Denied. You do not have permission to view this project." });
         }
 
@@ -274,7 +263,7 @@ export const getProjectById = async (req, res) => {
         const cached = await getCache(cacheKey);
         if (cached) {
             const copy = JSON.parse(JSON.stringify(cached));
-            if (!isAdmin && !isManager) {
+            if (!isManager) {
                 delete copy.budget;
             }
             return res.status(200).json(copy);
@@ -282,7 +271,7 @@ export const getProjectById = async (req, res) => {
 
         await setCache(cacheKey, project, 90); // 90s TTL
 
-        if (!isAdmin && !isManager) {
+        if (!isManager) {
             delete project.budget;
         }
 

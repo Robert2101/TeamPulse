@@ -6,7 +6,8 @@ import Project from '../models/project.model.js';
 import User from '../models/user.model.js';
 import logger from '../utils/logger.js';
 import { logActivity } from '../utils/activityLogger.js';
-import { getIO } from '../socket/socket.js'; //  NEW: Import socket instance
+import { getIO } from '../socket/socket.js';
+import { canAccessProject } from '../utils/projectAccess.js';
 
 
 export const uploadFile = async (req, res) => {
@@ -26,11 +27,7 @@ export const uploadFile = async (req, res) => {
             if (!project) {
                 return res.status(404).json({ message: "Target project not found in your workspace." });
             }
-            const isAdmin = req.dbUser.role?.roleName === 'Admin';
-            const pmId = project.projectManager ? project.projectManager.toString() : null;
-            const isManager = pmId === req.dbUser._id.toString();
-            const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-            if (!isAdmin && !isManager && !isMember) {
+            if (!canAccessProject(project, req.dbUser)) {
                 return res.status(403).json({ message: "Access Denied. You cannot upload files to this project." });
             }
         } else if (entityType === 'Task') {
@@ -116,13 +113,8 @@ export const getFilesByEntity = async (req, res) => {
 
         if (projectIdToCheck) {
             const project = await Project.findById(projectIdToCheck);
-            if (project) {
-                const isAdmin = req.dbUser.role.roleName === 'Admin';
-                const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-                const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-                if (!isAdmin && !isManager && !isMember) {
-                    return res.status(403).json({ message: "Access Denied." });
-                }
+            if (project && !canAccessProject(project, req.dbUser)) {
+                return res.status(403).json({ message: "Access Denied." });
             }
         }
 

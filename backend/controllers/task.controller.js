@@ -5,6 +5,7 @@ import logger from '../utils/logger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
 import { getCache, setCache, delCache } from '../config/redis.js';
+import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 
 export const createTask = async (req, res) => {
     try {
@@ -19,11 +20,7 @@ export const createTask = async (req, res) => {
             return res.status(404).json({ message: "Project not found in your workspace." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to create a task in an unauthorized project.`);
             return res.status(403).json({ message: "Access Denied. You cannot create tasks in a project you do not belong to." });
         }
@@ -84,12 +81,7 @@ export const getTasksByProject = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. Project belongs to another workspace." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const pmId = project.projectManager ? project.projectManager.toString() : null;
-        const isManager = pmId === req.dbUser._id.toString();
-        const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Unauthorized task access attempt by User ${req.dbUser.emailAddress} on Project ${projectId}`);
             return res.status(403).json({ message: "Access Denied. You are not a member of this project." });
         }
@@ -179,11 +171,7 @@ export const updateTask = async (req, res) => {
             return res.status(404).json({ message: "Associated project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to update Task ${id} in an unauthorized project.`);
             return res.status(403).json({ message: "Access Denied. You cannot update tasks in a project you do not belong to." });
         }
@@ -195,7 +183,7 @@ export const updateTask = async (req, res) => {
         delete updateData.createdBy;
         delete updateData.createdAt;
 
-        if (!isAdmin && !isManager) {
+        if (!canManageProject(project, req.dbUser)) {
             delete updateData.taskName;
             delete updateData.taskDescription;
             delete updateData.assignee;
@@ -256,10 +244,7 @@ export const deleteTask = async (req, res) => {
             return res.status(404).json({ message: "Associated project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-
-        if (!isAdmin && !isManager) {
+        if (!canManageProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to delete Task ${id} without authorization.`);
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can delete tasks." });
         }
