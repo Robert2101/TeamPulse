@@ -5,13 +5,8 @@ import { Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
 import { AuthShell } from "./AuthShell";
 import { btn, field, label } from "../../lib/styles";
 import { errorMessage } from "../../lib/format";
-
-const DEMO_ACCOUNTS = [
-    { name: "Tony", role: "Admin", email: "tony@stark.com" },
-    { name: "Peter", role: "Dev", email: "peter@stark.com" },
-    { name: "Bruce", role: "Admin", email: "bruce@wayne.com" },
-    { name: "Dick", role: "Dev", email: "dick@wayne.com" },
-];
+import { DemoAccounts } from "../../components/DemoAccounts";
+import { demoEnabled } from "../../lib/demo";
 
 export const Login = () => {
     const [credentials, setCredentials] = useState({ emailAddress: "", password: "" });
@@ -37,11 +32,6 @@ export const Login = () => {
         } finally {
             setLoading(false);
         }
-    };
-
-    const loadDemo = (email) => {
-        setCredentials({ emailAddress: email, password: "password123" });
-        setError("");
     };
 
     return (
@@ -113,23 +103,13 @@ export const Login = () => {
                 </button>
             </form>
 
-            {/* Demo Credentials for Interview */}
-            <div className="mt-8 border-t border-gray-200 pt-6">
-                <p className="mb-3 text-xs font-medium text-gray-600">Try a demo account</p>
-                <div className="grid grid-cols-2 gap-2">
-                    {DEMO_ACCOUNTS.map((acct) => (
-                        <button
-                            key={acct.email}
-                            type="button"
-                            onClick={() => loadDemo(acct.email)}
-                            className="flex min-h-10 items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-left text-sm text-gray-800 transition-colors hover:border-gray-300 hover:bg-white"
-                        >
-                            <span className="truncate font-medium">{acct.name}</span>
-                            <span className="shrink-0 text-xs text-gray-600">{acct.role}</span>
-                        </button>
-                    ))}
+            {demoEnabled && (
+                <div className="mt-8 border-t border-gray-200 pt-6">
+                    <p className="text-sm font-medium text-gray-900">Or open the demo workspace</p>
+                    <p className="mt-0.5 mb-3 text-xs text-gray-600">Sample company and data. One click signs you in.</p>
+                    <DemoAccounts compact />
                 </div>
-            </div>
+            )}
         </AuthShell>
     );
 };

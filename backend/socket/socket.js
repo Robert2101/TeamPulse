@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import logger from "../utils/logger.js";
 import User from "../models/user.model.js";
 import Project from "../models/project.model.js";
+import { canAccessProject } from "../utils/projectAccess.js";
 
 let io;
 
@@ -41,10 +42,14 @@ export const initSocket = (server) => {
 
             // 5. Fetch user using the decoded ID (handling common payload structures)
             const userId = decoded.id || decoded.userId || decoded._id;
-            const user = await User.findById(userId).populate('role');
+            const user = await User.findById(userId).select('-password +tokenVersion').populate('role');
 
             if (!user) {
                 return next(new Error("Authentication error: User not found in database"));
+            }
+
+            if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+                return next(new Error("Authentication error: Session revoked"));
             }
 
             // X-03 FIX: Block deactivated users from maintaining WebSocket connections
@@ -64,6 +69,9 @@ export const initSocket = (server) => {
     io.on("connection", (socket) => {
         logger.info(`🔌 Secure Socket Connected: ${socket.dbUser.fullName} (${socket.id})`);
 
+        // Personal room, so revoking a user's sessions can also drop their live connections.
+        socket.join(`user:${socket.dbUser._id}`);
+
         socket.on("join-project", async (projectId) => {
             try {
                 const project = await Project.findById(projectId);
@@ -79,12 +87,7 @@ export const initSocket = (server) => {
                 }
 
                 // Role-Based Security for WebSocket Rooms
-                const isAdmin = socket.dbUser.role?.roleName === 'Admin';
-                const pmId = project.projectManager ? project.projectManager.toString() : null;
-                const isManager = pmId === socket.dbUser._id.toString();
-                const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(id => id.toString() === socket.dbUser._id.toString());
-
-                if (isAdmin || isManager || isMember) {
+                if (canAccessProject(project, socket.dbUser)) {
                     socket.join(projectId);
                     logger.info(`${socket.dbUser.fullName} securely joined Project Room: ${projectId}`);
                 } else {
@@ -102,20 +105,21 @@ export const initSocket = (server) => {
             logger.info(`Socket ${socket.id} left Project Room: ${projectId}`);
         });
 
-        // Typing Indicators
-        socket.on("typing", (data) => {
-            // data ideally has { projectId, taskId, userName }
-            if (data.projectId) {
-                socket.to(data.projectId).emit("user-typing", data);
-            }
-        });
+        // Typing indicators: relay only into rooms this socket was authorized to join (join-project),
+        // and take the name from the verified session rather than the client payload.
+        const relayTyping = (event) => (data) => {
+            const projectId = data?.projectId?.toString();
+            if (!projectId || !socket.rooms.has(projectId)) return;
+            socket.to(projectId).emit(event, {
+                projectId,
+                taskId: data.taskId,
+                userId: socket.dbUser._id.toString(),
+                userName: socket.dbUser.fullName,
+            });
+        };
 
-        socket.on("stop-typing", (data) => {
-            // data ideally has { projectId, taskId, userName }
-            if (data.projectId) {
-                socket.to(data.projectId).emit("user-stop-typing", data);
-            }
-        });
+        socket.on("typing", relayTyping("user-typing"));
+        socket.on("stop-typing", relayTyping("user-stop-typing"));
 
         socket.on("disconnect", () => {
             logger.info(`Socket Disconnected: ${socket.dbUser.fullName} (${socket.id})`);
@@ -123,6 +127,11 @@ export const initSocket = (server) => {
     });
 
     return io;
+};
+
+/** Disconnects every live socket of a user (after their sessions were revoked). */
+export const disconnectUser = (userId) => {
+    io?.in(`user:${userId}`).disconnectSockets(true);
 };
 
 export const getIO = () => {

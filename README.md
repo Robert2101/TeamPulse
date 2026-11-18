@@ -1,10 +1,12 @@
 # TeamPulse
 
+[![CI](https://github.com/Robert2101/TeamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Robert2101/TeamPulse/actions/workflows/ci.yml)
+
 **Real-time, multi-tenant project management platform built on the MERN stack.**
 
 TeamPulse lets organizations run their entire delivery operation inside isolated workspaces: role-based teams collaborate on live Kanban boards, discuss tasks in real time, manage files on a Cloudinary pipeline, and get answers from an AI assistant that reads — and safely acts on — their actual project data. Every layer is hardened for tenancy isolation, dual-layer RBAC, and performance under load.
 
-> Ditch the chaos. Experience project management that breathes with your team.
+To try it, run it locally ([Docker](#run-with-docker) or [npm](#running-the-application)) and click **Explore the demo** on the landing page: it signs into a seeded sample workspace in one click, and a role picker opens it as an Admin, a Project Manager, a Team Member, or an Admin of a second company.
 
 ---
 
@@ -24,8 +26,10 @@ TeamPulse lets organizations run their entire delivery operation inside isolated
 12. [Environment Variables](#environment-variables)
 13. [Installation & Setup](#installation--setup)
 14. [Running the Application](#running-the-application)
-15. [Load Testing](#load-testing)
-16. [Project Structure](#project-structure)
+15. [Deployment](#deployment)
+16. [Testing](#testing)
+17. [Load Testing](#load-testing)
+18. [Project Structure](#project-structure)
 
 ---
 
@@ -33,7 +37,7 @@ TeamPulse lets organizations run their entire delivery operation inside isolated
 
 ### 🏢 Multi-Tenant Workspaces
 - Two signup paths: **create a workspace** (creator becomes Admin) or **join via invite code** (joins land on the least-privileged Stakeholder role).
-- Auto-generated 6-character invite codes, surfaced in Settings with one-click copy.
+- Cryptographically random 8-character invite codes (no look-alike characters), shown to Admins in Settings with one-click copy and a "Generate a new code" action that retires the old one.
 - Every document — project, task, comment, file, activity — carries a `workspace` reference, and queries are tenant-scoped at the controller layer.
 
 ### 🔐 Four-Tier Role-Based Access Control
@@ -157,13 +161,18 @@ Each project owns a room keyed by its Mongo `_id`. Clients join via `useSocket(p
 | HTTP | Axios (401 interceptor → auto-logout) + native fetch (SSE chat stream) | 1.6 |
 | Real-time client | socket.io-client (custom `useSocket` hook) | 4.7 |
 | File drops | react-dropzone | 15.x |
-| Landing animations | ogl (WebGL shader hero) + lenis (smooth-scroll stack) — via react-bits | ogl 1.0, lenis 1.3 |
+| Motion | GSAP + Flip: board card moves, task panel, landing preview; every animation honours reduced motion | 3.15 |
+| Code splitting | Route-level `React.lazy`; the task panel and files tab load on demand | — |
 | Linting | ESLint 9 flat config + react-hooks/react-refresh plugins | 9.x |
 
 ### Testing & Deployment
 
 | Area | Tooling |
 |---|---|
+| API tests | Vitest + Supertest + mongodb-memory-server (replica set): tenant isolation, RBAC, sessions, CSRF, rate limits, sockets, AI tool |
+| End-to-end tests | Playwright smoke tests against the real app and a seeded throwaway database |
+| CI/CD | GitHub Actions: lint, build, API and E2E tests, Docker builds; the backend image is pushed to GHCR from `master` |
+| Containers | Multi-stage Docker images (API on `node:24-alpine`, frontend on nginx) and a `docker-compose.yml` for the whole stack |
 | Load testing | k6 (Grafana Labs) — 11 scenarios, custom `tp_*` metrics, threshold presets |
 | Frontend hosting | Vercel-ready SPA config (`vercel.json` rewrites) |
 
@@ -194,7 +203,7 @@ Each project owns a room keyed by its Mongo `_id`. Clients join via `useSocket(p
 
 ### Anti-Mass-Assignment Protection (S-04)
 
-Update handlers strip protected fields (`_id`, `__v`, `workspace`, `createdBy`, `createdAt`) from request bodies; only Admins may reassign a project's manager. Team-member additions are resolved through per-user workspace validation — emails are looked up and must belong to the caller's workspace.
+Update handlers copy only an allow-list of editable fields from the request body, so protected fields (`_id`, `workspace`, `createdBy`, …) and update operators such as `$set` are ignored. Project members may change only a task's status; only Admins may reassign a project's manager, and the new manager must belong to the workspace. Team-member additions are resolved through per-user workspace validation — emails are looked up and must belong to the caller's workspace.
 
 ### Core Workflows
 
@@ -224,7 +233,7 @@ Update handlers strip protected fields (`_id`, `__v`, `workspace`, `createdBy`, 
 erDiagram
     WORKSPACE {
         ObjectId _id PK
-        string workspaceName UK
+        string workspaceName
         ObjectId owner FK
         string inviteCode UK
     }
@@ -351,7 +360,7 @@ erDiagram
     USER ||--o{ CHATBOT_INTERACTION : "asks"
 ```
 
-Indexes: unique on `User.emailAddress`, `Workspace.workspaceName`, `Workspace.inviteCode`, `Role.roleName`; compound index on `Comment (task, createdAt)`; indexed foreign keys across all collections.
+Indexes: unique on `User.emailAddress`, `Workspace.inviteCode`, `Role.roleName` (workspace names are not unique); compound index on `Comment (task, createdAt)`; indexed foreign keys across all collections.
 
 ---
 
@@ -385,12 +394,13 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 |---|---|---|
 | POST | `/signup` | Body: `fullName`, `emailAddress`, `password` + either `isCreatingWorkspace: true, workspaceName` or `inviteCode`. Rate-limited 10 req / 15 min / IP |
 | POST | `/login` | Sets JWT httpOnly cookie (24 h). Rate-limited 10 req / 15 min / IP |
-| POST | `/logout` | Clears cookie + invalidates Redis session cache |
-| GET | `/check-auth` | Returns hydrated user (role + workspace populated) |
+| POST | `/logout` | Revokes every session of the account (bumps `tokenVersion`), clears the cookie and cached session |
+| GET | `/check-auth` | Returns hydrated user (role + workspace populated; invite code for Admins only) and the session's CSRF token |
 | PUT | `/profile` | Update name/email/phone/password |
 | GET | `/workspace/users` | All users in your workspace |
 | PUT | `/workspace/users/:userId/role` | Admin only; cannot modify own role |
 | PUT | `/workspace/users/:userId/status` | Admin only; Active ⇄ Inactive; cannot deactivate self |
+| POST | `/workspace/invite-code` | Admin only; replaces the invite code (the old one stops working) |
 
 ### Projects — `/projects`
 
@@ -434,7 +444,7 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/:entityId` | Audit trail for a project (resolves its tasks/comments). Latest 100, 30 s cache, membership required |
+| GET | `/:entityId` | Audit trail for a project (resolves its tasks/comments). Latest 100, 30 s cache. Admins, and Project Managers with access to the project |
 
 ### AI Assistant — `/chatbot`
 
@@ -466,10 +476,12 @@ Writes follow a strict order: **persist to MongoDB first, invalidate Redis secon
 
 | Scope | Limit | Identifier |
 |---|---|---|
-| Auth endpoints | 10 / 15 min | IP |
+| Auth endpoints | 10 / 15 min | Client IP |
 | Chatbot `/ask` | 20 / 1 h | User ID |
-| File uploads | 30 / 15 min | IP |
-| File reads/deletes | 100 / 15 min | IP |
+| File uploads | 30 / 15 min | User ID |
+| File reads/deletes | 100 / 15 min | User ID |
+
+Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` hops (default 1 in production), so users behind the host's proxy get separate buckets and a client can't dodge limits by sending its own `X-Forwarded-For`.
 
 ---
 
@@ -479,7 +491,7 @@ Writes follow a strict order: **persist to MongoDB first, invalidate Redis secon
 
 - **Grounding** — the system instruction embeds only the caller's own active projects and pending tasks (formatted summaries, never raw dumps), with explicit anti-hallucination and prompt-injection defenses.
 - **Memory** — the last 4 persisted interactions are replayed as conversation context; up to 20 are retrievable via `/history`.
-- **Function calling** — the model can invoke `update_task_status(taskId, newStatus)`. Execution is guarded by `findOneAndUpdate({ _id, assignee: userId, workspace })`, so the AI can never touch someone else's tasks or cross tenants. Successful tool runs propagate the full side-effect chain: cache invalidation, `task-updated` broadcast, and activity logging with `source: 'chatbot'`.
+- **Function calling** — the model can invoke `update_task_status(taskId, newStatus)`. The status is validated against the board's columns first, and the update runs with the filter `{ _id, assignee: userId, workspace }`, so the AI can never touch someone else's tasks or cross tenants. It shares `applyTaskUpdate` with the REST API: schema validators, `completedAt`, cache invalidation, a populated `task-updated` broadcast, and an audit entry with `source: 'chatbot'`.
 - **Persistence** — every exchange is saved to `ChatbotInteraction` with a classified intent for analytics.
 
 ---
@@ -488,12 +500,13 @@ Writes follow a strict order: **persist to MongoDB first, invalidate Redis secon
 
 | Concern | Implementation |
 |---|---|
-| Sessions | JWT (24 h) in `httpOnly` cookies; `secure` + `SameSite=None` in production, `Lax` in development. Tokens never exposed to JavaScript |
+| Sessions | JWT (24 h) in `httpOnly` cookies; `secure` + `SameSite=None` in production, `Lax` in development. Tokens never exposed to JavaScript. Each token carries the user's `tokenVersion`; logout, a password change, a role change or deactivation bumps it, so older tokens (and their sockets) stop working immediately |
 | Transport | CORS locked to `CLIENT_URL` with credentials; Socket.IO handshake requires a valid cookie + live user account |
+| CSRF | State-changing requests must send `X-CSRF-Token`: an HMAC of the session (user + `tokenVersion`) returned by login and `check-auth`, which other origins can't read. Bodies must be JSON or multipart, so plain HTML forms can't post to the API |
 | Password storage | bcrypt (salt rounds 10); passwords excluded from all responses (`select('-password')`) |
 | Authorization | Dual-layer: route permission flags + controller ownership/membership checks; cross-tenant attempts return `403` and are logged |
 | Tenancy | Every query filtered by `workspace`; socket rooms enforce workspace + membership |
-| Input hardening | Mass-assignment field stripping on updates; Mongoose enums/length validators; explicit payload validation in controllers |
+| Input hardening | Allow-listed fields on updates (no mass assignment); Mongoose enums/length validators; explicit payload validation in controllers |
 | File uploads | MIME whitelist, 50 MB cap, memory-only processing, forced `entityId` for avatar uploads, Cloudinary destroy via stored IDs |
 | Account lifecycle | Deactivated users are blocked at login, on every API request, and even on socket reconnect |
 | Observability | Winston structured logs (error + combined files in dev, JSON in prod); security alerts on privilege-escalation attempts |
@@ -528,6 +541,8 @@ UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_rest_token
 
 CLIENT_URL=http://localhost:5173
+# Proxy hops in front of the API; defaults to 1 in production, 0 otherwise
+# TRUST_PROXY=1
 
 CLOUDINARY_CLOUD_NAME=<cloud name>
 CLOUDINARY_API_KEY=<api key>
@@ -543,6 +558,8 @@ See [`backend/.env.example`](backend/.env.example).
 ```
 # Omit in production to hit same-origin /api (reverse-proxy setup)
 VITE_API_URL=http://localhost:5001
+# Hide the one-click demo accounts (landing page and sign-in page)
+# VITE_DEMO_ACCOUNTS=false
 ```
 
 ---
@@ -604,6 +621,76 @@ cd frontend && npm run build   # outputs frontend/dist
 
 Serve `dist/index.html` for all routes and reverse-proxy `/api` and `/socket.io` to the backend process. With `VITE_API_URL` unset at build time, the frontend targets same-origin `/api` automatically; set `NODE_ENV=production` on the backend for `SameSite=None; Secure` cookies and JSON logging.
 
+### Run with Docker
+
+The whole stack (MongoDB 7 as a single-node replica set, the API, and the built frontend behind nginx) starts with one command:
+
+```bash
+cp backend/.env.example backend/.env     # once; add Cloudinary/Gemini/Upstash keys if you have them
+docker compose up --build                 # app on http://localhost:8080, API on http://localhost:5001
+docker compose run --rm backend node seed.js   # wipes and seeds the bundled database
+```
+
+- nginx serves the app and proxies `/api` and `/socket.io` to the API, so both share one origin.
+- Compose overrides `MONGO_URI` to the bundled database, so seeding never touches the database in your `.env`.
+- The API image is a multi-stage `node:24-alpine` build with production dependencies only, runs as the non-root `node` user, and has a `HEALTHCHECK` on `GET /api/health`.
+- `docker compose down -v` removes the containers and the database volume.
+
+---
+
+## Deployment
+
+TeamPulse is two deployables: a static frontend and a containerized API with MongoDB.
+
+### Frontend (Vercel)
+
+- Import the repository with **Root Directory** `frontend`; Vercel detects Vite (`npm run build`, output `dist`). `frontend/vercel.json` rewrites every route to `index.html`.
+- Set `VITE_API_URL` to the API origin, without `/api` (for example `https://api.example.com`). Leave it unset only if the frontend's own domain proxies `/api` and `/socket.io` to the API.
+- `VITE_DEMO_ACCOUNTS=false` hides the one-click demo accounts.
+
+### API (any container host)
+
+Run the image CI publishes, `ghcr.io/robert2101/teampulse-backend:latest`, or build `backend/Dockerfile` on a host such as Render, Railway or Fly.io.
+
+| Variable | Value |
+|---|---|
+| `NODE_ENV` | `production` (JSON logs; `Secure`, `SameSite=None` session cookie) |
+| `MONGO_URI` | A MongoDB replica set such as Atlas; transactions are used when available |
+| `JWT_SECRET` | A long random string; changing it signs everyone out |
+| `CLIENT_URL` | The frontend origin exactly, e.g. `https://teampulse.vercel.app`. CORS and Socket.IO accept only this origin |
+| `TRUST_PROXY` | Proxy hops in front of the API (`1` on most platforms), so rate limits see real client IPs |
+| `COOKIE_SAME_SITE` | Leave unset when the API is on another site. Set `lax` when the app and API share a site (e.g. `app.example.com` and `api.example.com`) |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Optional: caching and rate limits (both fail open without Redis) |
+| `CLOUDINARY_*`, `GEMINI_API_KEY` | Optional: file uploads and the AI assistant |
+
+- **Health check:** point the platform's health check and an uptime monitor at `GET /api/health`. It answers 200 when the API and database are up, 503 otherwise.
+- **HTTPS:** both sites need HTTPS in production, because the cross-site session cookie is `Secure`.
+- **Demo data:** `node seed.js` loads the demo workspace, but it **wipes the database `MONGO_URI` points at**. Run it only against a database reserved for the demo.
+
+### GitHub configuration
+
+| Secret | Used by |
+|---|---|
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | `redis-keepalive.yml`, which pings the free-tier Upstash database every 8 hours |
+| `BACKEND_DEPLOY_HOOK_URL` (optional) | `ci.yml` calls it after pushing a new image from `master`, to redeploy the API |
+
+To make CI a merge gate, mark the **CI** checks as required in the branch protection rule for `master` (Settings → Branches).
+
+---
+
+## Testing
+
+```bash
+cd backend && npm test          # API tests: Vitest + Supertest on an in-memory MongoDB replica set
+cd frontend && npm run test:e2e # Playwright smoke tests (needs a local MongoDB; see below)
+```
+
+- **API tests** need nothing installed: a MongoDB binary is downloaded on the first run. They seed two workspaces and cover:
+  - tenant isolation and the role matrix;
+  - allow-listed updates, session revocation, CSRF and rate-limit keys;
+  - socket room checks, file access, transactions and the AI tool (Gemini mocked).
+- **End-to-end tests** start the API and the Vite dev server, then seed a throwaway database before running. It is `mongodb://127.0.0.1:27017/teampulse_e2e` by default; override it with `E2E_MONGO_URI`. The setup refuses any database whose name doesn't contain `e2e` or `test`. Run `npx playwright install chromium` once.
+
 ---
 
 ## Load Testing
@@ -632,24 +719,33 @@ Scenarios: smoke · baseline · normal load · read-heavy · **cache-read (Redis
 
 ```
 TeamPulse/
+├── docker-compose.yml             # MongoDB (replica set) + API + frontend
+├── .github/workflows/             # ci.yml (lint, build, tests, images), redis-keepalive.yml
 ├── backend/
-│   ├── server.js                  # Express app, CORS, routes, Mongo bootstrap
-│   ├── seed.js                    # Multi-tenant demo data seeder
+│   ├── app.js                     # Express app: CORS, CSRF, health check, routes
+│   ├── server.js                  # Env, Socket.IO, Mongo connection, listen
+│   ├── Dockerfile                 # Multi-stage production image
+│   ├── seed.js                    # Multi-tenant demo data seeder (wipes the database)
 │   ├── config/
 │   │   ├── redis.js               # Upstash client, cache helpers, rate limiter
 │   │   └── cloudinary.js          # Cloudinary SDK config
 │   ├── middleware/
-│   │   ├── auth.middleware.js     # protectRoute (JWT + Redis session), requirePermission
+│   │   ├── auth.middleware.js     # protectRoute (JWT + token version + Redis session), requirePermission
+│   │   ├── csrf.middleware.js     # CSRF tokens, JSON-only bodies
+│   │   ├── rateLimit.middleware.js # Per-IP / per-user sliding windows
 │   │   └── upload.middleware.js   # Multer memory storage, MIME/size limits
 │   ├── models/                    # User, Workspace, Role, Project, Task,
 │   │                              # Comment, FileAsset, Activity, ChatbotInteraction
 │   ├── controllers/               # auth, project, task, comment,
 │   │                              # file, activity, chatbot
 │   ├── routes/                    # One router per domain
+│   ├── services/                  # task updates (shared by REST and AI), cascade cleanup
 │   ├── socket/socket.js           # JWT handshake auth, rooms, typing relay
-│   ├── utils/                     # logger (Winston), activityLogger (+ cache funnel)
-│   └── logs/                      # Dev log output
+│   ├── utils/                     # projectAccess, session, transaction, logger, activityLogger
+│   └── tests/                     # Vitest + Supertest API tests
 ├── frontend/
+│   ├── Dockerfile / nginx.conf    # Static build served by nginx, proxying /api and /socket.io
+│   ├── e2e/                       # Playwright smoke tests
 │   ├── src/
 │   │   ├── App.jsx                # Router, auth gate, protected layout
 │   │   ├── store/useStore.js      # Zustand global store
@@ -663,8 +759,8 @@ TeamPulse/
 │   │       ├── TaskModal/         # Details panel, header, description,
 │   │       │                      # attachments, real-time chat
 │   │       ├── files/             # DropZone, Preview (lightbox, download)
-│   │       ├── ui/                # shadcn/Radix primitives
-│   │       └── GradientBlinds / ScrollStack   # Landing animations
+│   │       ├── DemoAccounts.jsx   # One-click demo sign-in
+│   │       └── ui/                # shadcn/Radix primitives
 │   └── vercel.json                # SPA rewrites
 └── tests/load/k6/                 # 11 load-test scenarios + helpers + thresholds
 ```

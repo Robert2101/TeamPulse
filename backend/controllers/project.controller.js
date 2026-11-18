@@ -2,9 +2,19 @@ import Project from '../models/project.model.js';
 import User from '../models/user.model.js';
 import logger from '../utils/logger.js';
 import Task from '../models/task.model.js';
-import Comment from '../models/comment.model.js';
+import FileAsset from '../models/fileAsset.model.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getCache, setCache, delCache, delWorkspaceCacheKeys } from '../config/redis.js';
+import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
+import { pick } from '../utils/pick.js';
+import { withTransaction } from '../utils/transaction.js';
+import { deleteTasksCascade, destroyStoredFiles } from '../services/cleanup.service.js';
+
+// Fields a PUT may change; only Admins may also reassign the Project Manager.
+const PROJECT_FIELDS = [
+    'projectName', 'projectDescription', 'budget', 'clientName', 'startDate', 'endDate',
+    'priority', 'projectStatus', 'projectType', 'assignedTeamMembers',
+];
 
 export const createProject = async (req, res) => {
     try {
@@ -104,7 +114,7 @@ export const getAllProjects = async (req, res) => {
 
         // RBAC: Hide budget from regular team members/stakeholders
         const sanitizedProjects = projects.map(p => {
-            if (!isAdmin && p.projectManager._id.toString() !== req.dbUser._id.toString()) {
+            if (!canManageProject(p, req.dbUser)) {
                 delete p.budget;
             }
             return p;
@@ -124,29 +134,26 @@ export const getAllProjects = async (req, res) => {
 export const updateProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const updateData = req.body;
 
         const project = await Project.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!project) {
             return res.status(404).json({ message: "Project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-
-        if (!isAdmin && !isManager) {
+        if (!canManageProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to update Project ${id} without authorization.`);
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can update this project." });
         }
 
-        // S-04 FIX: Strip protected fields to prevent mass assignment attacks
-        delete updateData._id;
-        delete updateData.__v;
-        delete updateData.workspace;
-        delete updateData.createdBy;
-        delete updateData.createdAt;
-        if (!isAdmin) {
-            delete updateData.projectManager; // Only admins can reassign PM
+        // S-04: allow-list the body so protected fields (and `$set`-style operators) can't be mass-assigned
+        const isAdmin = req.dbUser.role.roleName === 'Admin';
+        const updateData = pick(req.body, isAdmin ? [...PROJECT_FIELDS, 'projectManager'] : PROJECT_FIELDS);
+
+        if (updateData.projectManager) {
+            const newManager = await User.exists({ _id: updateData.projectManager, workspace: req.dbUser.workspace?._id || req.dbUser.workspace });
+            if (!newManager) {
+                return res.status(400).json({ message: "The new Project Manager must belong to your workspace." });
+            }
         }
 
         // Resolve emails to ObjectIds safely if frontend passes an array containing emails or user objects
@@ -175,7 +182,7 @@ export const updateProject = async (req, res) => {
         const updatedProject = await Project.findByIdAndUpdate(
             id,
             updateData,
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress profilePicture');
 
@@ -205,24 +212,26 @@ export const deleteProject = async (req, res) => {
             return res.status(404).json({ message: "Project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-
-        if (!isAdmin && !isManager) {
+        if (!canManageProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to delete Project ${id} without authorization.`);
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can delete this project." });
         }
 
-        await Project.findByIdAndDelete(id);
+        // Project, tasks, comments and file records go together or not at all
+        const { taskIds, files } = await withTransaction(async (session) => {
+            const tasks = await Task.find({ projectReference: id, workspace: req.dbUser.workspace }).select('_id').session(session).lean();
+            const taskIds = tasks.map(task => task._id);
+            const taskFiles = await deleteTasksCascade(taskIds, session);
 
-        const tasks = await Task.find({ projectReference: id, workspace: req.dbUser.workspace });
-        const taskIds = tasks.map(task => task._id);
+            const projectFiles = await FileAsset.find({ entityType: 'Project', entityId: id }).session(session).lean();
+            await FileAsset.deleteMany({ entityType: 'Project', entityId: id }, { session });
+            await Project.deleteOne({ _id: id, workspace: req.dbUser.workspace }, { session });
 
-        await Task.deleteMany({ projectReference: id });
+            return { taskIds, files: [...taskFiles, ...projectFiles] };
+        });
 
-        if (taskIds.length > 0) {
-            await Comment.deleteMany({ task: { $in: taskIds } });
-        }
+        // Stored files can only be removed after the commit
+        await destroyStoredFiles(files);
 
         const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
 
@@ -257,15 +266,9 @@ export const getProjectById = async (req, res) => {
             return res.status(404).json({ message: "Project not found in your workspace." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const pmId = project.projectManager ? (project.projectManager._id ? project.projectManager._id.toString() : project.projectManager.toString()) : null;
-        const isManager = pmId === req.dbUser._id.toString();
-        const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(member => {
-            const memberId = typeof member === 'object' ? member._id.toString() : member.toString();
-            return memberId === req.dbUser._id.toString();
-        });
+        const isManager = canManageProject(project, req.dbUser);
 
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             return res.status(403).json({ message: "Access Denied. You do not have permission to view this project." });
         }
 
@@ -274,7 +277,7 @@ export const getProjectById = async (req, res) => {
         const cached = await getCache(cacheKey);
         if (cached) {
             const copy = JSON.parse(JSON.stringify(cached));
-            if (!isAdmin && !isManager) {
+            if (!isManager) {
                 delete copy.budget;
             }
             return res.status(200).json(copy);
@@ -282,7 +285,7 @@ export const getProjectById = async (req, res) => {
 
         await setCache(cacheKey, project, 90); // 90s TTL
 
-        if (!isAdmin && !isManager) {
+        if (!isManager) {
             delete project.budget;
         }
 

@@ -1,10 +1,18 @@
 import Task from '../models/task.model.js';
 import Project from '../models/project.model.js';
-import Comment from '../models/comment.model.js';
 import logger from '../utils/logger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
 import { getCache, setCache, delCache } from '../config/redis.js';
+import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
+import { pick } from '../utils/pick.js';
+import { applyTaskUpdate } from '../services/task.service.js';
+import { withTransaction } from '../utils/transaction.js';
+import { deleteTasksCascade, destroyStoredFiles } from '../services/cleanup.service.js';
+
+// Fields a PATCH may change. Members of a project may only move tasks between columns.
+const MANAGER_TASK_FIELDS = ['taskName', 'taskDescription', 'assignee', 'dueDate', 'priority', 'taskStatus'];
+const MEMBER_TASK_FIELDS = ['taskStatus'];
 
 export const createTask = async (req, res) => {
     try {
@@ -19,11 +27,7 @@ export const createTask = async (req, res) => {
             return res.status(404).json({ message: "Project not found in your workspace." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to create a task in an unauthorized project.`);
             return res.status(403).json({ message: "Access Denied. You cannot create tasks in a project you do not belong to." });
         }
@@ -84,12 +88,7 @@ export const getTasksByProject = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. Project belongs to another workspace." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const pmId = project.projectManager ? project.projectManager.toString() : null;
-        const isManager = pmId === req.dbUser._id.toString();
-        const isMember = Array.isArray(project.assignedTeamMembers) && project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Unauthorized task access attempt by User ${req.dbUser.emailAddress} on Project ${projectId}`);
             return res.status(403).json({ message: "Access Denied. You are not a member of this project." });
         }
@@ -167,7 +166,6 @@ export const getMyTasks = async (req, res) => {
 export const updateTask = async (req, res) => {
     try {
         const { id } = req.params;
-        const updateData = req.body;
 
         const task = await Task.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!task) {
@@ -179,64 +177,30 @@ export const updateTask = async (req, res) => {
             return res.status(404).json({ message: "Associated project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to update Task ${id} in an unauthorized project.`);
             return res.status(403).json({ message: "Access Denied. You cannot update tasks in a project you do not belong to." });
         }
 
-        // S-04 FIX: Strip protected fields to prevent mass assignment attacks
-        delete updateData._id;
-        delete updateData.__v;
-        delete updateData.workspace;
-        delete updateData.createdBy;
-        delete updateData.createdAt;
+        // S-04: allow-list the body so protected fields (and `$set`-style operators) can't be mass-assigned
+        const changes = pick(req.body, canManageProject(project, req.dbUser) ? MANAGER_TASK_FIELDS : MEMBER_TASK_FIELDS);
 
-        if (!isAdmin && !isManager) {
-            delete updateData.taskName;
-            delete updateData.taskDescription;
-            delete updateData.assignee;
-            delete updateData.dueDate;
-            delete updateData.priority;
-            delete updateData.projectReference;
-        }
-
-        updateData.updatedBy = req.dbUser._id;
-
-        if (updateData.taskStatus === "Done") {
-            updateData.completedAt = new Date();
-        }
-
-        const updatedTask = await Task.findByIdAndUpdate(
-            id,
-            updateData,
-            { new: true, runValidators: true }
-        );
-
-        const populatedTask = await Task.findById(updatedTask._id)
-            .populate('assignee', 'fullName emailAddress')
-            .populate('updatedBy', 'fullName');
-
-        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
-
-        // Write Mongo FIRST -> delete Redis cache SECOND
-        await delCache(`tasks:project:${task.projectReference}`);
-        await delCache(`dash:stats:${workspaceId}`);
-
-        await logActivity(req.dbUser._id, req.dbUser.workspace, `Updated Task to ${populatedTask.taskStatus}`, 'Task', populatedTask._id, {
-            taskName: populatedTask.taskName,
-            newStatus: populatedTask.taskStatus,
-            projectId: task.projectReference.toString()
+        const updatedTask = await applyTaskUpdate({
+            filter: { _id: id, workspace: req.dbUser.workspace },
+            changes,
+            user: req.dbUser,
         });
+        if (!updatedTask) {
+            return res.status(404).json({ message: "Task not found." });
+        }
 
-        logger.info(`Task updated: '${populatedTask.taskName}' (ID: ${id}) by User ID: ${req.dbUser._id}`);
-        getIO().to(populatedTask.projectReference.toString()).emit('task-updated', populatedTask);
-        res.status(200).json({ message: "Task updated successfully", task: populatedTask });
+        logger.info(`Task updated: '${updatedTask.taskName}' (ID: ${id}) by User ID: ${req.dbUser._id}`);
+        res.status(200).json({ message: "Task updated successfully", task: updatedTask });
 
     } catch (error) {
+        if (error.name === 'ValidationError' || error.name === 'CastError') {
+            return res.status(400).json({ message: error.message });
+        }
         logger.error(`Error updating task (ID: ${req.params.id}): ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: "Internal server error while updating task." });
     }
@@ -256,16 +220,14 @@ export const deleteTask = async (req, res) => {
             return res.status(404).json({ message: "Associated project not found." });
         }
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-
-        if (!isAdmin && !isManager) {
+        if (!canManageProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to delete Task ${id} without authorization.`);
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can delete tasks." });
         }
 
-        await Task.findByIdAndDelete(id);
-        await Comment.deleteMany({ task: id });
+        // Task, its comments and their file records go together; stored files after the commit
+        const files = await withTransaction((session) => deleteTasksCascade([task._id], session));
+        await destroyStoredFiles(files);
 
         const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
 

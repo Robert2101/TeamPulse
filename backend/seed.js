@@ -158,74 +158,125 @@ const seedDatabase = async () => {
             );
         }
 
-        // 6. CREATE REALISTIC TASKS SPREAD EVERYWHERE
+        // 6. TASKS, DISCUSSIONS AND HISTORY
+        // Each task has a real brief, a short thread, and the same audit trail the app writes
+        // (created -> moved -> commented), spread over the last few days.
+        const [pepper, rhodey] = pms;
+        const [peter, bruce, natasha, clint, thor, wanda, sam] = devs;
+        const [armor, compound, reactor, ultron] = insertedProjects;
+        const HOUR = 3600000;
+        const at = (hoursAgo) => new Date(Date.now() - hoursAgo * HOUR);
+
         const tasksData = [
-            // Project 1 (Armor - PM: Pepper)
-            { taskName: 'Nanobot Storage Algorithm', projectReference: insertedProjects[0]._id, assignee: devs[0]._id, due: 5, status: 'In-Progress', prio: 'High' },
-            { taskName: 'HUD UI Redesign', projectReference: insertedProjects[0]._id, assignee: devs[0]._id, due: 15, status: 'To-Do', prio: 'Medium' },
-            { taskName: 'Gamma Signature Masking', projectReference: insertedProjects[0]._id, assignee: devs[1]._id, due: -2, status: 'Done', prio: 'Urgent' },
-            { taskName: 'Thruster Output Test', projectReference: insertedProjects[0]._id, assignee: pms[0]._id, due: 2, status: 'Review', prio: 'High' },
-
-            // Project 2 (Compound - PM: Rhodey)
-            { taskName: 'Blueprint Finalization', projectReference: insertedProjects[1]._id, assignee: pms[1]._id, due: 0, status: 'Review', prio: 'Urgent' },
-            { taskName: 'Stealth Wing Reinforcement', projectReference: insertedProjects[1]._id, assignee: devs[2]._id, due: 30, status: 'To-Do', prio: 'High' },
-            { taskName: 'Archery Range Moving Targets', projectReference: insertedProjects[1]._id, assignee: devs[3]._id, due: 20, status: 'In-Progress', prio: 'Medium' },
-            { taskName: 'Flight Simulator Check', projectReference: insertedProjects[1]._id, assignee: devs[6]._id, due: 10, status: 'To-Do', prio: 'Low' },
-
-            // Project 3 (Arc Reactor - Completed)
-            { taskName: 'Isotope Synthesis', projectReference: insertedProjects[2]._id, assignee: devs[1]._id, due: -30, status: 'Done', prio: 'Urgent' },
-            { taskName: 'Chaos Magic Shielding', projectReference: insertedProjects[2]._id, assignee: devs[5]._id, due: -20, status: 'Done', prio: 'High' },
-
-            // Project 4 (Ultron - On Hold)
-            { taskName: 'AI Pattern Recognition', projectReference: insertedProjects[3]._id, assignee: devs[0]._id, due: 60, status: 'In-Progress', prio: 'Urgent' },
-            { taskName: 'Asgardian Firewall Integrity', projectReference: insertedProjects[3]._id, assignee: devs[4]._id, due: 45, status: 'To-Do', prio: 'Medium' }
+            {
+                taskName: 'Nanobot storage algorithm', project: armor, manager: pepper, assignee: peter, due: 5, status: 'In-Progress', prio: 'High', createdHoursAgo: 120,
+                description: 'Rework how the suit packs dormant nanobots between deployments. The current layout wastes about a fifth of the housing.\n\nDone when:\n- full deployment from storage takes under 2 seconds\n- the new layout passes the cold-vacuum bench test',
+                thread: [
+                    [pepper, 'Can we have a first benchmark before Friday\'s review?', 30],
+                    [peter, 'Yes. The prototype already packs 12% tighter. Posting bench numbers tomorrow morning.', 26],
+                ],
+            },
+            {
+                taskName: 'HUD layout for combat mode', project: armor, manager: pepper, assignee: peter, due: 15, status: 'To-Do', prio: 'Medium', createdHoursAgo: 96,
+                description: 'Pilots say combat mode shows too much at once. Group the readouts by urgency and keep the centre of view clear.\n\nStart from the pilot feedback in the last flight debrief.',
+                thread: [[adminUser, 'Keep the threat indicator where it is. Muscle memory matters more than symmetry.', 50]],
+            },
+            {
+                taskName: 'Gamma signature masking', project: armor, manager: pepper, assignee: bruce, due: -2, status: 'Done', prio: 'Urgent', createdHoursAgo: 240,
+                description: 'Mask the suit\'s gamma signature so long-range scanners can\'t track it.\n\nVerify against the full scanner suite before closing.',
+                thread: [
+                    [bruce, 'Masking holds at full output on every scanner in the suite. Moving this to Done.', 60],
+                    [pepper, 'Great work. I\'ll note it in this week\'s client report.', 58],
+                ],
+            },
+            {
+                taskName: 'Thruster output test', project: armor, manager: pepper, assignee: pepper, due: 2, status: 'Review', prio: 'High', createdHoursAgo: 72,
+                description: 'Run the thruster test at 70%, 85% and 100% output and record heat drift at each step.\n\nNeeds Tony\'s sign-off before the next test flight.',
+                thread: [
+                    [pepper, 'Results are in. Heat drift is within tolerance at 85% and slightly over at 100%.', 20],
+                    [adminUser, 'Over at 100% is acceptable for now. Approve it with a note for the next revision.', 6],
+                ],
+            },
+            {
+                taskName: 'Finalize compound blueprints', project: compound, manager: rhodey, assignee: rhodey, due: 0, status: 'Review', prio: 'Urgent', createdHoursAgo: 160,
+                description: 'Final blueprints for the training wing, living quarters and hangars. Contractors start the week after approval.',
+                thread: [
+                    [natasha, 'Hangar 2 still shows the old door width.', 40],
+                    [rhodey, 'Fixed in revision 7. Can you check it again?', 34],
+                    [natasha, 'Looks right now.', 12],
+                ],
+            },
+            {
+                taskName: 'Reinforce the east wing', project: compound, manager: rhodey, assignee: natasha, due: 30, status: 'To-Do', prio: 'High', createdHoursAgo: 150,
+                description: 'Reinforce the east wing walls for the new hangar. Schedule the work after the blueprints are approved.',
+                thread: [],
+            },
+            {
+                taskName: 'Moving targets on the archery range', project: compound, manager: rhodey, assignee: clint, due: 20, status: 'In-Progress', prio: 'Medium', createdHoursAgo: 140,
+                description: 'Install a track system for moving targets on the outdoor range. Targets must be controllable from the range tablet.',
+                thread: [[clint, 'Track is in. Wiring the controller next.', 18]],
+            },
+            {
+                taskName: 'Flight simulator yearly check', project: compound, manager: rhodey, assignee: sam, due: 10, status: 'To-Do', prio: 'Low', createdHoursAgo: 130,
+                description: 'Yearly check of the flight simulator: recalibrate the motion base, inspect the harness and update the software.',
+                thread: [],
+            },
+            {
+                taskName: 'Isotope synthesis', project: reactor, manager: pepper, assignee: bruce, due: -30, status: 'Done', prio: 'Urgent', createdHoursAgo: 900,
+                description: 'Synthesise the stable isotope for the grid-scale reactor core.',
+                thread: [[bruce, 'Batch three is stable. Handing over to integration.', 760]],
+            },
+            {
+                taskName: 'Containment shielding', project: reactor, manager: pepper, assignee: wanda, due: -20, status: 'Done', prio: 'High', createdHoursAgo: 880,
+                description: 'Design the containment shielding for the reactor housing and verify it under peak load.',
+                thread: [[wanda, 'Shielding held at 140% of peak load in the final run.', 500]],
+            },
+            {
+                taskName: 'Anomaly detection model', project: ultron, manager: rhodey, assignee: peter, due: 60, status: 'In-Progress', prio: 'Urgent', createdHoursAgo: 300,
+                description: 'Train a model that flags unusual behaviour in autonomous systems before it spreads across the network.',
+                thread: [[rhodey, 'The project is on hold until legal clears data access. Please stop at a clean checkpoint.', 90]],
+            },
+            {
+                taskName: 'Firewall integrity audit', project: ultron, manager: rhodey, assignee: thor, due: 45, status: 'To-Do', prio: 'Medium', createdHoursAgo: 290,
+                description: 'Audit the perimeter firewall rules and list every rule that allows outbound traffic without an owner.',
+                thread: [],
+            },
         ];
 
-        const generatedTasks = [];
-        for (let t of tasksData) {
-            generatedTasks.push(await Task.create({
+        const activities = [];
+        let commentCount = 0;
+        for (const t of tasksData) {
+            const task = await Task.create({
                 taskName: t.taskName,
-                taskDescription: `Action item: Needs immediate completion for ${t.taskName}. Please refer to the engineering manual for specifications.`,
-                projectReference: t.projectReference,
+                taskDescription: t.description,
+                projectReference: t.project._id,
                 workspace: wId,
-                assignee: t.assignee,
-                dueDate: new Date(Date.now() + (t.due * 86400000)),
+                assignee: t.assignee._id,
+                dueDate: new Date(Date.now() + t.due * 86400000),
                 priority: t.prio,
                 taskStatus: t.status,
-                createdBy: adminId
-            }));
-        }
-        console.log(`📋 Pushed ${generatedTasks.length} Action Tasks into the Grid.`);
-
-        // 7. SPREAD ACTIVITIES & COMMENTS
-        for (let task of generatedTasks) {
-            await Comment.create({
-                commentContent: `Taking a heavy look at this task: ${task.taskName}. Will update shortly!`,
-                author: task.assignee || adminId,
-                task: task._id,
-                workspace: wId
+                completedAt: t.status === 'Done' ? at(Math.max(t.createdHoursAgo / 4, 2)) : undefined,
+                createdBy: t.manager._id,
+                createdAt: at(t.createdHoursAgo),
             });
-
-            await Activity.create({
-                user: task.assignee || adminId,
-                action: 'Updated Status',
-                entityType: 'Task',
-                entityId: task._id,
-                workspace: wId,
-                metadata: { oldStatus: 'To-Do', newStatus: task.taskStatus }
-            });
+            const projectId = t.project._id.toString();
+            activities.push({ user: t.manager._id, action: 'Created Task', entityType: 'Task', entityId: task._id, workspace: wId, createdAt: at(t.createdHoursAgo), metadata: { taskName: t.taskName, projectId } });
+            if (t.status !== 'To-Do') {
+                activities.push({ user: t.assignee._id, action: `Updated Task to ${t.status}`, entityType: 'Task', entityId: task._id, workspace: wId, createdAt: at(t.createdHoursAgo / 2), metadata: { taskName: t.taskName, previousStatus: 'To-Do', newStatus: t.status, projectId } });
+            }
+            for (const [author, text, hoursAgo] of t.thread) {
+                const comment = await Comment.create({ commentContent: text, author: author._id, task: task._id, workspace: wId, createdAt: at(hoursAgo) });
+                await Task.updateOne({ _id: task._id }, { $push: { comments: comment._id } });
+                activities.push({ user: author._id, action: 'Added Comment', entityType: 'Comment', entityId: comment._id, workspace: wId, createdAt: at(hoursAgo), metadata: { taskId: task._id, taskName: t.taskName, projectId } });
+                commentCount += 1;
+            }
         }
-        
-        await Activity.create({
-            user: adminId,
-            action: 'Created Workspace',
-            entityType: 'User',
-            entityId: adminId,
-            workspace: wId,
-            metadata: { detail: 'Tony created the Stark Industries workspace environment.' }
-        });
+        console.log(`📋 Created ${tasksData.length} tasks with ${commentCount} comments.`);
 
-        console.log("📝 Flushed Activity streams & Team Comments successfully.");
+        activities.push({ user: adminId, action: 'Created Workspace', entityType: 'User', entityId: adminId, workspace: wId, createdAt: at(1000), metadata: {} });
+        await Activity.insertMany(activities);
+
+        console.log("📝 Activity history written.");
 
         // =========================================================
         // TENANT 2: WAYNE ENTERPRISES
@@ -297,7 +348,7 @@ const seedDatabase = async () => {
             entityType: 'User',
             entityId: bruceWayne._id,
             workspace: wayneWId,
-            metadata: { detail: 'Bruce created the Wayne Enterprises hidden environment.' }
+            metadata: {}
         });
 
         console.log("🦇 Wayne Enterprises tenant seeded successfully.");

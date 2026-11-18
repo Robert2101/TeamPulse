@@ -34,7 +34,6 @@ export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, on
     // Mirror the route guards in App.jsx so we never link to a page that bounces the user.
     const filteredMenuItems = menuItems.filter(item => {
         if (item.path === '/dashboard' && !user?.role?.viewReports) return false;
-        if (item.path === '/tasks' && isAdmin) return false;
         if (item.path === '/activity' && (!user?.role?.viewReports || (!isAdmin && !isManager))) return false;
         return true;
     });

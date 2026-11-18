@@ -1,15 +1,35 @@
 import User from '../models/user.model.js';
 import Role from '../models/role.model.js';
-import Workspace from '../models/workspace.model.js';
+import Workspace, { generateInviteCode } from '../models/workspace.model.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import logger from '../utils/logger.js';
 import mongoose from 'mongoose';
 import { delCache } from '../config/redis.js';
+import { authCookieOptions, issueSession, revokeSessions } from '../utils/session.js';
+import { csrfTokenFor } from '../middleware/csrf.middleware.js';
+import { withTransaction } from '../utils/transaction.js';
+
+// What the client may see about the signed-in user: never tokenVersion, and the workspace
+// invite code only for Admins (they're the ones who share it).
+const toClientUser = (user) => {
+    const plain = typeof user?.toObject === 'function' ? user.toObject() : { ...user };
+    delete plain.tokenVersion;
+    delete plain.password;
+    if (plain.role?.roleName !== 'Admin' && plain.workspace?.inviteCode) {
+        plain.workspace = { ...plain.workspace };
+        delete plain.workspace.inviteCode;
+    }
+    return plain;
+};
 
 export const signup = async (req, res) => {
     try {
         const { fullName, emailAddress, password, isCreatingWorkspace, workspaceName, inviteCode } = req.body;
+
+        if (!fullName?.trim() || !emailAddress?.trim() || !password) {
+            return res.status(400).json({ message: "Name, email and password are required" });
+        }
 
         const existingUser = await User.findOne({ emailAddress });
         if (existingUser) return res.status(400).json({ message: "User already exists" });
@@ -19,30 +39,25 @@ export const signup = async (req, res) => {
 
         let workspaceId;
         let roleId;
+        let newWorkspace = null;
 
         // Generate a new User ID ahead of time so the Workspace can reference it
         const newUserId = new mongoose.Types.ObjectId();
 
         if (isCreatingWorkspace) {
-            if (!workspaceName) return res.status(400).json({ message: "Workspace name is required" });
+            if (!workspaceName?.trim()) return res.status(400).json({ message: "Workspace name is required" });
 
             const adminRole = await Role.findOne({ roleName: 'Admin' });
             roleId = adminRole._id;
 
-            // Generate workspace ID beforehand
+            // Generate workspace ID beforehand; the workspace is created together with its owner below
             workspaceId = new mongoose.Types.ObjectId();
-
-            // Create workspace directly with the pre-generated User ID as the owner
-            await Workspace.create({
-                _id: workspaceId,
-                workspaceName,
-                owner: newUserId
-            });
+            newWorkspace = { _id: workspaceId, workspaceName, owner: newUserId };
 
         } else {
             if (!inviteCode) return res.status(400).json({ message: "Invite code is required to join" });
 
-            const workspace = await Workspace.findOne({ inviteCode: inviteCode.toUpperCase() });
+            const workspace = await Workspace.findOne({ inviteCode: String(inviteCode).trim().toUpperCase() });
             if (!workspace) return res.status(404).json({ message: "Invalid invite code" });
 
             // ENFORCING PRINCIPLE OF LEAST PRIVILEGE
@@ -52,18 +67,27 @@ export const signup = async (req, res) => {
             workspaceId = workspace._id;
         }
 
-        // Create the user with the pre-generated ID
-        const newUser = await User.create({
-            _id: newUserId,
-            fullName,
-            emailAddress,
-            password: hashedPassword,
-            role: roleId,
-            workspace: workspaceId
+        // Workspace and owner commit together: a failed user insert (e.g. a duplicate-email race)
+        // can no longer leave an orphan workspace behind.
+        await withTransaction(async (session) => {
+            if (newWorkspace) {
+                await Workspace.create([newWorkspace], { session });
+            }
+            await User.create([{
+                _id: newUserId,
+                fullName,
+                emailAddress,
+                password: hashedPassword,
+                role: roleId,
+                workspace: workspaceId
+            }], { session });
         });
 
         res.status(201).json({ message: "User registered successfully" });
     } catch (error) {
+        if (error.code === 11000 && error.keyPattern?.emailAddress) {
+            return res.status(400).json({ message: "User already exists" });
+        }
         logger.error(`Signup Error: ${error.message}`);
         res.status(500).json({ message: "Error creating user" });
     }
@@ -73,7 +97,7 @@ export const login = async (req, res) => {
     try {
         const { emailAddress, password } = req.body;
 
-        const user = await User.findOne({ emailAddress }).select('+password');
+        const user = await User.findOne({ emailAddress }).select('+password +tokenVersion');
         if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
         if (user.status === 'Inactive') {
@@ -83,46 +107,42 @@ export const login = async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
-        const token = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '1d' }
-        );
+        await User.updateOne({ _id: user._id }, { $set: { lastLogin: new Date() } });
 
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-            maxAge: 24 * 60 * 60 * 1000 // 1 day
-        });
-        
+        issueSession(res, user);
+
         const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
-        res.status(200).json({ message: "Login successful", user: populatedUser });
+        res.status(200).json({ message: "Login successful", user: toClientUser(populatedUser), csrfToken: csrfTokenFor(user._id, user.tokenVersion) });
     } catch (error) {
         logger.error(`Login Error Detail: ${error.message}`);
         res.status(500).json({ message: "Server error during login" });
     }
 };
 
+// Not behind protectRoute, so an expired session can still log out. Revoking bumps tokenVersion,
+// which ends every session of the account: a copied cookie stops working too.
 export const logout = async (req, res) => {
-    if (req.dbUser?._id) {
-        await delCache(`session:user:${req.dbUser._id}`);
+    const token = req.cookies?.token;
+    if (token) {
+        try {
+            // verify, not decode: a forged cookie must not be able to log someone else out
+            const { userId } = jwt.verify(token, process.env.JWT_SECRET);
+            await revokeSessions(userId);
+        } catch (error) {
+            logger.info(`Logout without a valid session: ${error.message}`);
+        }
     }
-    res.clearCookie('token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
-    });
+    res.clearCookie('token', authCookieOptions());
     res.status(200).json({ message: "Logged out successfully" });
 };
 
 export const checkAuth = async (req, res) => {
     try {
-        // req.dbUser is already populated by your protectRoute middleware!
-        // We just return it to the frontend to update Zustand
+        // req.dbUser is already populated by protectRoute
         res.status(200).json({
             authenticated: true,
-            user: req.dbUser
+            user: toClientUser(req.dbUser),
+            csrfToken: csrfTokenFor(req.dbUser._id, req.dbUser.tokenVersion)
         });
     } catch (error) {
         res.status(500).json({ message: "Error checking auth status" });
@@ -172,8 +192,8 @@ export const updateUserRole = async (req, res) => {
         targetUser.role = requestedRole._id;
         await targetUser.save();
 
-        // Invalidate session cache for the updated user
-        await delCache(`session:user:${userId}`);
+        // New permissions start from a fresh sign-in (also clears the cached session)
+        await revokeSessions(userId);
 
         res.status(200).json({ message: "User role updated successfully" });
     } catch (error) {
@@ -207,8 +227,12 @@ export const updateUserStatus = async (req, res) => {
         targetUser.status = status;
         await targetUser.save();
 
-        // Invalidate session cache for the updated user
-        await delCache(`session:user:${userId}`);
+        if (status === 'Inactive') {
+            // Kill existing tokens and live sockets, so reactivation doesn't revive old sessions
+            await revokeSessions(userId);
+        } else {
+            await delCache(`session:user:${userId}`);
+        }
 
         res.status(200).json({ message: `User status updated to ${status}` });
     } catch (error) {
@@ -233,14 +257,58 @@ export const updateProfile = async (req, res) => {
         }
 
         await user.save();
-        
+
         // Invalidate session cache for the user
         await delCache(`session:user:${user._id}`);
 
+        let tokenVersion = req.dbUser.tokenVersion;
+        if (password) {
+            // A new password ends every other session; this one continues with a fresh cookie
+            tokenVersion = await revokeSessions(user._id);
+            issueSession(res, { _id: user._id, tokenVersion });
+        }
+
         const populatedUser = await User.findById(user._id).select('-password').populate('role').populate('workspace');
-        res.status(200).json({ message: "Profile updated successfully", user: populatedUser });
+        res.status(200).json({ message: "Profile updated successfully", user: toClientUser(populatedUser), csrfToken: csrfTokenFor(user._id, tokenVersion) });
     } catch (error) {
         logger.error(`Update Profile Error: ${error.message}`);
         res.status(500).json({ message: "Failed to update profile" });
+    }
+};
+
+// Admins can rotate the invite code, e.g. after it leaked; the old code stops working immediately.
+export const regenerateInviteCode = async (req, res) => {
+    try {
+        if (req.dbUser.role.roleName !== 'Admin') {
+            return res.status(403).json({ message: "Only Admins can change the invite code" });
+        }
+
+        const workspaceId = req.dbUser.workspace?._id || req.dbUser.workspace;
+        let workspace = null;
+        for (let attempt = 0; attempt < 5 && !workspace; attempt++) {
+            try {
+                workspace = await Workspace.findByIdAndUpdate(
+                    workspaceId,
+                    { inviteCode: generateInviteCode() },
+                    { returnDocument: 'after' }
+                );
+            } catch (error) {
+                if (error.code !== 11000) throw error; // code already taken: try another one
+            }
+        }
+        if (!workspace) {
+            return res.status(503).json({ message: "Couldn't generate a new code. Please try again." });
+        }
+
+        // Cached sessions of the workspace's Admins still hold the old code
+        const adminRole = await Role.findOne({ roleName: 'Admin' }).select('_id').lean();
+        const admins = await User.find({ workspace: workspaceId, role: adminRole?._id }).select('_id').lean();
+        await Promise.all(admins.map((admin) => delCache(`session:user:${admin._id}`)));
+
+        logger.info(`Invite code regenerated for workspace ${workspaceId} by User ID: ${req.dbUser._id}`);
+        res.status(200).json({ message: "Invite code regenerated", inviteCode: workspace.inviteCode });
+    } catch (error) {
+        logger.error(`Regenerate Invite Code Error: ${error.message}`);
+        res.status(500).json({ message: "Failed to regenerate the invite code" });
     }
 };
