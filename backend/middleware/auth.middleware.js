@@ -18,7 +18,7 @@ export const protectRoute = async (req, res, next) => {
 
         if (!user) {
             user = await User.findById(decoded.userId)
-                .select('-password')
+                .select('-password +tokenVersion')
                 .populate('role')
                 .populate('workspace')
                 .lean();
@@ -32,6 +32,11 @@ export const protectRoute = async (req, res, next) => {
 
         if (user.status === 'Inactive') {
             return res.status(403).json({ message: "Your account has been deactivated. Please contact your administrator." });
+        }
+
+        // Tokens issued before the last logout/password change/role change are revoked.
+        if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+            return res.status(401).json({ message: "Your session has ended. Please log in again." });
         }
 
         req.dbUser = user;

@@ -385,7 +385,7 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 |---|---|---|
 | POST | `/signup` | Body: `fullName`, `emailAddress`, `password` + either `isCreatingWorkspace: true, workspaceName` or `inviteCode`. Rate-limited 10 req / 15 min / IP |
 | POST | `/login` | Sets JWT httpOnly cookie (24 h). Rate-limited 10 req / 15 min / IP |
-| POST | `/logout` | Clears cookie + invalidates Redis session cache |
+| POST | `/logout` | Revokes every session of the account (bumps `tokenVersion`), clears the cookie and cached session |
 | GET | `/check-auth` | Returns hydrated user (role + workspace populated) |
 | PUT | `/profile` | Update name/email/phone/password |
 | GET | `/workspace/users` | All users in your workspace |
@@ -490,7 +490,7 @@ Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` ho
 
 | Concern | Implementation |
 |---|---|
-| Sessions | JWT (24 h) in `httpOnly` cookies; `secure` + `SameSite=None` in production, `Lax` in development. Tokens never exposed to JavaScript |
+| Sessions | JWT (24 h) in `httpOnly` cookies; `secure` + `SameSite=None` in production, `Lax` in development. Tokens never exposed to JavaScript. Each token carries the user's `tokenVersion`; logout, a password change, a role change or deactivation bumps it, so older tokens (and their sockets) stop working immediately |
 | Transport | CORS locked to `CLIENT_URL` with credentials; Socket.IO handshake requires a valid cookie + live user account |
 | Password storage | bcrypt (salt rounds 10); passwords excluded from all responses (`select('-password')`) |
 | Authorization | Dual-layer: route permission flags + controller ownership/membership checks; cross-tenant attempts return `403` and are logged |
