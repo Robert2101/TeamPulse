@@ -1,8 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
-import dotenv from 'dotenv';
 
-dotenv.config();
-
+// Env is loaded by server.js (dotenv/config) before this module is evaluated.
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,

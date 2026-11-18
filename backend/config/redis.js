@@ -9,7 +9,7 @@ let initialized = false;
 
 /**
  * Initialize the Upstash Redis client.
- * MUST be called AFTER dotenv.config() to ensure env vars are loaded.
+ * Reads env vars at call time, so call it after dotenv has loaded them (server.js does).
  * Safe to call multiple times — only initializes once.
  */
 export const initRedis = () => {
