@@ -105,6 +105,13 @@ describe('demo sandboxes', () => {
         expect((await lucas.get('/api/auth/check-auth')).status).toBe(401);
     });
 
+    it('discards the sandbox when the visitor leaves', async () => {
+        const maya = await startDemo('admin');
+        expect((await maya.post('/api/auth/logout')).status).toBe(200);
+        expect(await Workspace.exists({ _id: maya.user.workspace._id })).toBeNull();
+        expect(await Task.countDocuments({ workspace: maya.user.workspace._id })).toBe(0);
+    });
+
     it('rejects unknown roles', async () => {
         expect((await request(app).post('/api/demo/start').send({ persona: 'root' })).status).toBe(400);
     });
