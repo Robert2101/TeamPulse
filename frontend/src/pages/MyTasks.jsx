@@ -1,11 +1,75 @@
 import { useCallback, useEffect, useState } from "react";
-import { Calendar, FolderKanban, ListChecks, RotateCw } from "lucide-react";
+import { ListChecks, RotateCw } from "lucide-react";
 import api from "../lib/axios";
 import { Link } from "react-router-dom";
-import { PriorityBadge, TaskStatusBadge } from "../components/ui/badges";
-import { formatDate, isOverdue, errorMessage } from "../lib/format";
+import { PriorityIcon } from "../components/ui/priority-icon";
+import { TASK_STATUS_DOT, taskKey } from "../lib/taskMeta";
+import { formatDate, errorMessage } from "../lib/format";
 import { btn, card } from "../lib/styles";
 import { cn } from "../lib/utils";
+
+const DAY = 86400000;
+const daysUntil = (date) => {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    return Math.round((new Date(date).setHours(0, 0, 0, 0) - start.getTime()) / DAY);
+};
+
+const dueLabel = (task) => {
+    if (task.taskStatus === "Done") return task.completedAt ? `Done ${formatDate(task.completedAt, { short: true })}` : "Done";
+    if (!task.dueDate) return "No due date";
+    const d = daysUntil(task.dueDate);
+    if (d < 0) return `${-d} day${d === -1 ? "" : "s"} overdue`;
+    if (d === 0) return "Due today";
+    if (d === 1) return "Due tomorrow";
+    if (d < 7) return `Due ${new Date(task.dueDate).toLocaleDateString(undefined, { weekday: "long" })}`;
+    return `Due ${formatDate(task.dueDate, { short: true })}`;
+};
+
+// Open work grouped by when it is due, soonest first; completed work by when it was finished.
+const groupTasks = (tasks, filter) => {
+    if (filter === "done") {
+        return [{ title: "Completed", tasks: [...tasks].sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0)) }];
+    }
+    const groups = [
+        { title: "Overdue", tone: "danger", test: (d) => d !== null && d < 0 },
+        { title: "Today and tomorrow", test: (d) => d === 0 || d === 1 },
+        { title: "Next 7 days", test: (d) => d !== null && d > 1 && d <= 7 },
+        { title: "Later", test: (d) => d !== null && d > 7 },
+        { title: "No due date", test: (d) => d === null },
+    ];
+    const sorted = [...tasks].sort((a, b) => new Date(a.dueDate || 8.64e15) - new Date(b.dueDate || 8.64e15));
+    return groups
+        .map((g) => ({ ...g, tasks: sorted.filter((t) => g.test(t.dueDate ? daysUntil(t.dueDate) : null)) }))
+        .filter((g) => g.tasks.length > 0);
+};
+
+const TaskRow = ({ task }) => {
+    const project = task.projectReference;
+    const projectId = typeof project === "object" ? project?._id : project;
+    const key = taskKey(task);
+    const overdue = task.taskStatus !== "Done" && task.dueDate && daysUntil(task.dueDate) < 0;
+    return (
+        <li>
+            <Link
+                to={projectId ? `/project/${projectId}?task=${task._id}` : "/projects"}
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 sm:px-5"
+            >
+                <span className={cn("size-2 shrink-0 rounded-full", TASK_STATUS_DOT[task.taskStatus])} title={task.taskStatus} aria-hidden="true" />
+                <PriorityIcon priority={task.priority} />
+                <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                        {key && <span className="shrink-0 font-mono text-[11px] font-medium text-gray-500">{key}</span>}
+                        <span className="truncate text-sm font-medium text-gray-900">{task.taskName}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-gray-500">
+                        {project?.projectName || "Project"} · {task.taskStatus}
+                    </span>
+                </span>
+                <span className={cn("tabular shrink-0 text-xs", overdue ? "font-medium text-red-700" : "text-gray-600")}>{dueLabel(task)}</span>
+            </Link>
+        </li>
+    );
+};
 
 const FILTERS = [
     { id: "open", label: "Open" },
@@ -67,8 +131,8 @@ export const MyTasks = () => {
             </div>
 
             {loading ? (
-                <div className="grid gap-4 md:grid-cols-2" role="status" aria-label="Loading your tasks">
-                    {[0, 1, 2, 3].map((i) => <div key={i} className="h-36 animate-pulse rounded-2xl bg-gray-100" />)}
+                <div className="flex flex-col gap-2" role="status" aria-label="Loading your tasks">
+                    {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />)}
                 </div>
             ) : error ? (
                 <div className="flex flex-col items-center rounded-2xl border border-red-200 bg-red-50 px-6 py-12 text-center">
@@ -87,39 +151,18 @@ export const MyTasks = () => {
                     </p>
                 </div>
             ) : (
-                <ul className="grid gap-4 md:grid-cols-2">
-                    {visible.map((task) => {
-                        const project = task.projectReference;
-                        const projectId = typeof project === "object" ? project?._id : project;
-                        const overdue = isOverdue(task.dueDate, task.taskStatus);
-                        return (
-                            <li key={task._id} className="min-w-0">
-                                <Link
-                                    to={projectId ? `/project/${projectId}?task=${task._id}` : "/projects"}
-                                    className={cn(card, "group flex h-full flex-col p-5 transition-[border-color,box-shadow] hover:border-gray-300 hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]")}
-                                >
-                                    <div className="mb-3 flex items-center justify-between gap-2">
-                                        <PriorityBadge priority={task.priority} />
-                                        <TaskStatusBadge status={task.taskStatus} />
-                                    </div>
-                                    <h2 className="line-clamp-2 font-semibold text-gray-900 wrap-anywhere">{task.taskName}</h2>
-                                    {task.taskDescription && <p className="mt-1.5 line-clamp-2 text-sm text-gray-600 wrap-anywhere">{task.taskDescription}</p>}
-
-                                    <div className="mt-auto flex items-center justify-between gap-3 pt-4 text-xs">
-                                        <span className={cn("flex items-center gap-1.5", overdue ? "font-medium text-red-700" : "text-gray-600")}>
-                                            <Calendar size={14} aria-hidden="true" />
-                                            {task.dueDate ? `${overdue ? "Overdue · " : "Due "}${formatDate(task.dueDate)}` : "No due date"}
-                                        </span>
-                                        <span className="flex min-w-0 items-center gap-1.5 text-gray-700 group-hover:text-gray-900">
-                                            <FolderKanban size={14} className="shrink-0" aria-hidden="true" />
-                                            <span className="truncate">{project?.projectName || "Open project"}</span>
-                                        </span>
-                                    </div>
-                                </Link>
-                            </li>
-                        );
-                    })}
-                </ul>
+                <div className="flex flex-col gap-6">
+                    {groupTasks(visible, filter).map(({ title, tone, tasks }) => (
+                        <section key={title} aria-label={title}>
+                            <h2 className={cn("mb-2 flex items-center gap-2 px-1 text-xs font-medium", tone === "danger" ? "text-red-700" : "text-gray-500")}>
+                                {title} <span className="tabular font-normal text-gray-400">{tasks.length}</span>
+                            </h2>
+                            <ul className={cn(card, "divide-y divide-gray-100 overflow-hidden")}>
+                                {tasks.map((task) => <TaskRow key={task._id} task={task} />)}
+                            </ul>
+                        </section>
+                    ))}
+                </div>
             )}
         </div>
     );
