@@ -9,6 +9,43 @@ import { cn } from "../lib/utils";
 
 const ENTITY_ICON = { Task: CheckSquare, Comment: MessageSquare, Project: FolderKanban };
 
+const FIELD_LABELS = { taskName: "title", taskDescription: "description", assignee: "assignee", dueDate: "due date", priority: "priority" };
+const listOf = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`);
+const Strong = ({ children }) => <span className="font-medium text-gray-900">{children}</span>;
+
+// Turns a stored activity into the second half of a sentence ("moved Write copy to Review").
+// Entries written before names were recorded fall back to generic wording.
+const describeActivity = (log) => {
+    const m = log.metadata || {};
+    const action = log.action || "";
+    const task = m.taskName ? <Strong>{m.taskName}</Strong> : "a task";
+    const file = m.fileName ? <Strong>{m.fileName}</Strong> : "a file";
+    const viaAssistant = m.source === "chatbot" ? " with the AI assistant" : "";
+
+    const moved = action.match(/^Updated Task to (.+)$/) || (action === "Updated Status" && [null, m.newStatus]);
+    if (moved) return <>moved {task} to <Strong>{moved[1]}</Strong>{viaAssistant}</>;
+
+    switch (action) {
+        case "Edited Task": {
+            const fields = (m.fields || []).map((f) => FIELD_LABELS[f]).filter(Boolean);
+            if (fields.length === 1 && fields[0] === "assignee") return <>reassigned {task}</>;
+            return fields.length ? <>changed the {listOf(fields)} of {task}</> : <>edited {task}</>;
+        }
+        case "Created Task": return <>created {task}</>;
+        case "Deleted Task": return <>deleted {task}</>;
+        case "Added Comment": return <>commented on {task}</>;
+        case "Edited Comment": return <>edited a comment on {task}</>;
+        case "Deleted Comment": return <>deleted a comment on {task}</>;
+        case "Uploaded File": return <>uploaded {file}</>;
+        case "Deleted File": return <>removed {file}</>;
+        case "Created Project": return <>created the project{m.projectName && <> <Strong>{m.projectName}</Strong></>}</>;
+        case "Updated Project": return <>updated the project details</>;
+        case "Deleted Project": return <>deleted the project</>;
+        case "Created Workspace": return <>created the workspace</>;
+        default: return action ? action.toLowerCase() : "made a change";
+    }
+};
+
 export const ActivityLog = () => {
     const { projects, projectsLoaded, user } = useStore();
     const isAdmin = user?.role?.roleName === 'Admin';
@@ -45,27 +82,11 @@ export const ActivityLog = () => {
         return () => { cancelled = true; };
     }, [selectedProject, reloadKey]);
 
-    // Generate a human-readable sentence using the metadata
-    const generateLogSentence = (log) => {
-        const userName = <span className="font-semibold text-gray-900">{log.user?.fullName || "System"}</span>;
-        const targetName = log.metadata?.taskName || log.metadata?.projectName || "an item";
-
-        const actionLower = (log.action || '').toLowerCase();
-        let actionWord = <span className="text-gray-700">{log.action?.toLowerCase()}</span>;
-        if (actionLower.includes('delete')) actionWord = <span className="font-medium text-red-700">deleted</span>;
-        else if (actionLower.includes('create')) actionWord = <span className="text-gray-700">created</span>;
-
-        if (log.entityType === "Comment") {
-            return <p className="text-sm text-gray-700">{userName} {actionWord} a comment on a task.</p>;
-        }
-
-        return (
-            <p className="min-w-0 text-sm text-gray-700 wrap-anywhere">
-                {userName} {actionWord} {log.entityType ? log.entityType.toLowerCase() : "item"}{" "}
-                <span className="font-medium text-gray-900">"{targetName}"</span>
-            </p>
-        );
-    };
+    const generateLogSentence = (log) => (
+        <p className="min-w-0 text-sm text-gray-700 wrap-anywhere">
+            <span className="font-semibold text-gray-900">{log.user?.fullName || "System"}</span> {describeActivity(log)}
+        </p>
+    );
 
     const filteredLogs = filter === "All" ? logs : logs.filter(log => log.entityType === filter);
 
