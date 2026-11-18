@@ -1,14 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, Check, Loader2, MessageSquare, Minus, Sparkles } from "lucide-react";
 import { gsap, Flip, prefersReducedMotion } from "../lib/motion";
-import { useStore } from "../store/useStore";
 import { Avatar } from "../components/ui/avatar";
 import { PriorityBadge, ProjectStatusBadge } from "../components/ui/badges";
-import { DemoAccounts } from "../components/DemoAccounts";
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, demoEnabled } from "../lib/demo";
+import { DemoPersonas, DemoStatus } from "../components/DemoPersonas";
+import { useStartDemo } from "../hooks/useStartDemo";
+import { demoEnabled } from "../lib/demo";
 import { TASK_STATUS_DOT } from "../lib/taskMeta";
-import { errorMessage, formatDate } from "../lib/format";
+import { formatDate } from "../lib/format";
 import { btn } from "../lib/styles";
 import { cn } from "../lib/utils";
 
@@ -160,23 +160,10 @@ const STACK = [
 ];
 
 export const LandingPage = () => {
-    const login = useStore((s) => s.login);
-    const navigate = useNavigate();
-    const [entering, setEntering] = useState(false);
-    const [demoError, setDemoError] = useState("");
-
-    // One click from the landing page to a populated board, as the workspace Admin.
-    const enterDemo = async () => {
-        setEntering(true);
-        setDemoError("");
-        try {
-            await login({ emailAddress: DEMO_ACCOUNTS[0].email, password: DEMO_PASSWORD });
-            navigate("/dashboard");
-        } catch (err) {
-            setDemoError(errorMessage(err, "The demo is unavailable right now. Please try again in a moment."));
-            setEntering(false);
-        }
-    };
+    // One click from the landing page to a populated board: a private demo workspace, as its Admin.
+    const { start, pending, slow, error: demoError } = useStartDemo();
+    const entering = pending !== null;
+    const enterDemo = () => start("admin");
 
     const demoButton = (className) => (
         <button type="button" onClick={enterDemo} disabled={entering} className={cn(btn.primary, className)}>
@@ -210,7 +197,7 @@ export const LandingPage = () => {
                             {demoEnabled && demoButton("h-11 px-5")}
                             <Link to="/register" className={cn(demoEnabled ? btn.secondary : btn.primary, "h-11 px-5")}>Create a workspace</Link>
                         </div>
-                        {demoError && <p role="alert" className="mt-3 text-sm text-red-700">{demoError}</p>}
+                        <DemoStatus slow={slow} error={demoError} />
                         {demoEnabled && (
                             <p className="mt-4 text-sm text-gray-600">
                                 Opens a sample workspace as its Admin. No sign-up.{" "}
@@ -339,7 +326,7 @@ export const LandingPage = () => {
                         <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
                             <h2 id="demo-title" className="text-3xl font-semibold tracking-tight text-gray-900">Open the demo as anyone</h2>
                             <p className="mt-3 text-gray-600">A sample workspace with real projects, threads and history. Each account shows the app from a different role.</p>
-                            <DemoAccounts className="mt-8" />
+                            <DemoPersonas className="mt-8" />
                             <p className="mt-6 text-sm text-gray-600">
                                 Prefer your own? <Link to="/register" className="font-medium text-indigo-700 underline-offset-4 hover:underline">Create a workspace</Link> and invite your team with a code.
                             </p>
