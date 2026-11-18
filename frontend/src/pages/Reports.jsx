@@ -74,7 +74,7 @@ const AttentionList = ({ items, projectById, emptyText }) => (
                             <PriorityIcon priority={task.priority} />
                             <span className="min-w-0 flex-1">
                                 <span className="flex items-baseline gap-2">
-                                    {key && <span className="shrink-0 font-mono text-[11px] font-medium text-gray-500">{key}</span>}
+                                    {key && <span className="shrink-0 tabular text-[11px] font-medium text-gray-500">{key}</span>}
                                     <span className="truncate text-sm font-medium text-gray-900">{task.taskName}</span>
                                 </span>
                                 <span className="mt-0.5 block truncate text-xs text-gray-500">{project?.projectName}</span>
@@ -99,7 +99,7 @@ const ProjectRow = ({ project, tasks, pulse }) => {
         <li>
             <Link to={`/project/${project._id}`} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-gray-50 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto_auto]">
                 <span className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex h-5 min-w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 px-1 font-mono text-[11px] font-medium text-gray-600">{project.key ?? "—"}</span>
+                    <span className="flex h-5 min-w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 px-1 tabular text-[11px] font-medium text-gray-600">{project.key ?? "—"}</span>
                     <span className="truncate text-sm font-medium text-gray-900">{project.projectName}</span>
                     <ProjectStatusBadge status={project.projectStatus} className="hidden lg:inline-flex" />
                 </span>

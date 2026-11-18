@@ -58,7 +58,7 @@ const TaskRow = ({ task }) => {
                 <PriorityIcon priority={task.priority} />
                 <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                        {key && <span className="shrink-0 font-mono text-[11px] font-medium text-gray-500">{key}</span>}
+                        {key && <span className="shrink-0 tabular text-[11px] font-medium text-gray-500">{key}</span>}
                         <span className="truncate text-sm font-medium text-gray-900">{task.taskName}</span>
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-gray-500">
