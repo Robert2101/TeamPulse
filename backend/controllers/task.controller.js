@@ -32,7 +32,15 @@ export const createTask = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You cannot create tasks in a project you do not belong to." });
         }
 
+        // Next number for the project's task keys (APP-12); $inc is atomic, so concurrent creates can't collide.
+        const counter = await Project.findOneAndUpdate(
+            { _id: project._id },
+            { $inc: { taskCounter: 1 } },
+            { returnDocument: 'after', projection: { taskCounter: 1 } }
+        );
+
         const newTask = new Task({
+            number: counter.taskCounter,
             taskName,
             taskDescription,
             projectReference,
@@ -154,7 +162,7 @@ export const getDashboardStats = async (req, res) => {
 export const getMyTasks = async (req, res) => {
     try {
         const tasks = await Task.find({ assignee: req.dbUser._id, workspace: req.dbUser.workspace })
-            .populate('projectReference', 'projectName')
+            .populate('projectReference', 'projectName key')
             .sort({ dueDate: 1 });
         res.status(200).json(tasks);
     } catch (error) {
