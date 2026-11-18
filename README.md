@@ -650,12 +650,18 @@ TeamPulse is two deployables: a static frontend and a containerized API with Mon
 | API + Socket.IO | Render | https://teampulse-backend-338f.onrender.com (health: `/api/health`) |
 | Database | MongoDB | configured through `MONGO_URI` on the API |
 
-For this deployment, `CLIENT_URL` on the API is `https://teampulseapp.vercel.app`, and `VITE_API_URL` on Vercel is `https://teampulse-backend-338f.onrender.com`.
+The browser only ever talks to the frontend's domain: `frontend/vercel.json` proxies `/api` and `/socket.io` to Render. That keeps the session cookie first-party, which Safari and every iOS browser require (they block cookies set by another site, such as `onrender.com` under `vercel.app`).
+
+This deployment's settings:
+- **Vercel:** `VITE_API_URL` unset, `VITE_SOCKET_TRANSPORTS=polling`.
+- **Render:** `CLIENT_URL=https://teampulseapp.vercel.app`.
 
 ### Frontend (Vercel)
 
-- Import the repository with **Root Directory** `frontend`; Vercel detects Vite (`npm run build`, output `dist`). `frontend/vercel.json` rewrites every route to `index.html`.
-- Set `VITE_API_URL` to the API origin, without `/api` (for example `https://api.example.com`). Leave it unset only if the frontend's own domain proxies `/api` and `/socket.io` to the API.
+- Import the repository with **Root Directory** `frontend`; Vercel detects Vite (`npm run build`, output `dist`).
+- `frontend/vercel.json` proxies `/api/*` and `/socket.io/*` to the API and rewrites every other route to `index.html`. If you fork the project, point those two rewrites at your own API host.
+- Leave `VITE_API_URL` unset so the app calls its own domain. Only set it, to the API origin without `/api`, if you serve the API from another site and accept that Safari will block the session cookie.
+- Set `VITE_SOCKET_TRANSPORTS=polling`. Vercel rewrites can't carry WebSockets, so Socket.IO uses HTTP long-polling, which is still real-time.
 - `VITE_DEMO_ACCOUNTS=false` hides the one-click demo accounts.
 
 ### API (any container host)
@@ -668,13 +674,13 @@ Run the image CI publishes, `ghcr.io/robert2101/teampulse-backend:latest`, or bu
 | `MONGO_URI` | A MongoDB replica set such as Atlas; transactions are used when available |
 | `JWT_SECRET` | A long random string; changing it signs everyone out |
 | `CLIENT_URL` | The frontend origin exactly, e.g. `https://teampulse.vercel.app`. CORS and Socket.IO accept only this origin |
-| `TRUST_PROXY` | Proxy hops in front of the API (`1` on most platforms), so rate limits see real client IPs |
-| `COOKIE_SAME_SITE` | Leave unset when the API is on another site. Set `lax` when the app and API share a site (e.g. `app.example.com` and `api.example.com`) |
+| `TRUST_PROXY` | Number of proxies between the browser and the API, so rate limits see real client IPs. Behind the Vercel proxy that is at least 2 (Vercel plus the host's load balancer). Every access-log line starts with the IP the API resolved; if it shows a proxy instead of a visitor, raise the value |
+| `COOKIE_SAME_SITE` | Optional. `lax` is safe once every request goes through the frontend's domain (proxy or shared site); the default `none` also works |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Optional: caching and rate limits (both fail open without Redis) |
 | `CLOUDINARY_*`, `GEMINI_API_KEY` | Optional: file uploads and the AI assistant |
 
 - **Health check:** point the platform's health check and an uptime monitor at `GET /api/health`. It answers 200 when the API and database are up, 503 otherwise.
-- **HTTPS:** both sites need HTTPS in production, because the cross-site session cookie is `Secure`.
+- **HTTPS:** required in production, because the session cookie is `Secure`.
 - **Demo data:** `node seed.js` loads the demo workspace, but it **wipes the database `MONGO_URI` points at**. Run it only against a database reserved for the demo.
 
 ### GitHub configuration
