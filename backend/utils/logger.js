@@ -8,6 +8,7 @@ const consoleFormat = winston.format.combine(
     })
 );
 
+const isTest = process.env.NODE_ENV === 'test';
 const transports = [];
 
 if (process.env.NODE_ENV === 'production') {
@@ -19,6 +20,8 @@ if (process.env.NODE_ENV === 'production') {
             )
         })
     );
+} else if (isTest) {
+    transports.push(new winston.transports.Console({ format: consoleFormat }));
 } else {
     transports.push(
         new winston.transports.Console({ format: consoleFormat }),
@@ -29,7 +32,8 @@ if (process.env.NODE_ENV === 'production') {
 
 const logger = winston.createLogger({
     level: 'info',
-    transports
+    transports,
+    silent: isTest
 });
 
 export default logger;

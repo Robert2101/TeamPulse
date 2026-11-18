@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { setCsrfToken, withCsrf } from '../lib/csrf';
 
 const baseURL = import.meta.env.VITE_API_URL 
     ? `${import.meta.env.VITE_API_URL}/api`
@@ -7,6 +8,7 @@ const baseURL = import.meta.env.VITE_API_URL
 
 axios.defaults.baseURL = baseURL;
 axios.defaults.withCredentials = true;
+withCsrf(axios);
 
 export const useStore = create((set) => ({
     user: null,
@@ -18,7 +20,8 @@ export const useStore = create((set) => ({
         try {
             const res = await axios.get('/auth/check-auth');
             set({ user: res.data.user, isAuthChecking: false });
-        } catch (error) {
+        } catch {
+            setCsrfToken(null);
             set({ user: null, isAuthChecking: false, projects: [], projectsLoaded: false });
         }
     },
@@ -35,6 +38,7 @@ export const useStore = create((set) => ({
         } catch (error) {
             console.error("Logout request failed", error);
         } finally {
+            setCsrfToken(null);
             set({ user: null, projects: [], projectsLoaded: false });
         }
     },

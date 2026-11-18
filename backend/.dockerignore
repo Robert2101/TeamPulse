@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log*
+*.log
+logs
+.env
+.env.*
+tests
+coverage
+vitest.config.js
+Dockerfile
+.dockerignore
+.DS_Store

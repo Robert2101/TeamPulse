@@ -3,6 +3,7 @@ import Task from '../models/task.model.js';
 import logger from '../utils/logger.js';
 import { getIO } from '../socket/socket.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { canAccessProject } from '../utils/projectAccess.js';
 
 export const addComment = async (req, res) => {
     try {
@@ -18,11 +19,7 @@ export const addComment = async (req, res) => {
 
         const project = task.projectReference;
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             return res.status(403).json({ message: "Access Denied. You cannot comment on this task." });
         }
 
@@ -46,7 +43,7 @@ export const addComment = async (req, res) => {
             comment: savedComment
         });
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Added Comment', 'Comment', savedComment._id, { taskId });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Added Comment', 'Comment', savedComment._id, { taskId, taskName: task.taskName, projectId: project._id.toString() });
 
         res.status(201).json({ message: "Comment added", comment: savedComment });
 
@@ -67,11 +64,7 @@ export const getCommentsByTask = async (req, res) => {
 
         const project = task.projectReference;
 
-        const isAdmin = req.dbUser.role.roleName === 'Admin';
-        const isManager = project.projectManager.toString() === req.dbUser._id.toString();
-        const isMember = project.assignedTeamMembers.some(id => id.toString() === req.dbUser._id.toString());
-
-        if (!isAdmin && !isManager && !isMember) {
+        if (!canAccessProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to read comments on unauthorized task ${taskId}`);
             return res.status(403).json({ message: "Access Denied. You cannot view comments for this project." });
         }
@@ -113,9 +106,12 @@ export const editComment = async (req, res) => {
         updatedComment = await updatedComment.populate('author', 'fullName profilePicture');
         updatedComment = await updatedComment.populate('attachments');
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Edited Comment', 'Comment', updatedComment._id, { taskId: comment.task });
-
         const taskObj = await Task.findById(comment.task);
+        const projectId = taskObj?.projectReference?.toString();
+
+        // projectId lets logActivity clear that project's cached audit log
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Edited Comment', 'Comment', updatedComment._id, { taskId: comment.task, taskName: taskObj?.taskName, projectId });
+
         if (taskObj) {
             getIO().to(taskObj.projectReference.toString()).emit('comment-edited', updatedComment);
         }
@@ -145,7 +141,7 @@ export const deleteComment = async (req, res) => {
 
         await Task.findByIdAndUpdate(comment.task, { $pull: { comments: id } });
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Comment', 'Comment', id, { taskId: comment.task });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted Comment', 'Comment', id, { taskId: comment.task, taskName: taskObj?.taskName, projectId: taskObj?.projectReference?.toString() });
 
         if (taskObj) {
             getIO().to(taskObj.projectReference.toString()).emit('comment-deleted', id);

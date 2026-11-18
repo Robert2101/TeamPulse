@@ -1,0 +1,53 @@
+# Full local stack: MongoDB, the API and the built frontend.
+#   cp backend/.env.example backend/.env    (once; add API keys for uploads/AI if you have them)
+#   docker compose up --build               -> http://localhost:8080
+#   docker compose run --rm backend node seed.js   (wipes and seeds the bundled database)
+name: teampulse
+
+services:
+  mongo:
+    image: mongo:7
+    # A single-node replica set: the API uses transactions for signup and cascade deletes.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # Initiates the replica set on first boot, then reports healthy once it has a primary.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok }"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: backend/.env
+    environment:
+      # These win over backend/.env, so the stack always uses the bundled database.
+      NODE_ENV: production
+      PORT: "5001"
+      MONGO_URI: mongodb://mongo:27017/teampulse?replicaSet=rs0
+      CLIENT_URL: http://localhost:8080
+      TRUST_PROXY: "1"
+      # The app and API share localhost:8080 through nginx, over plain http.
+      COOKIE_SAME_SITE: lax
+      COOKIE_SECURE: "false"
+    ports:
+      - "5001:5001"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

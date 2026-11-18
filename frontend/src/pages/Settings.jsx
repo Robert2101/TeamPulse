@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useStore } from "../store/useStore";
-import { Mail, Phone, Shield, Camera, CheckCircle2, AlertCircle, Loader2, Pencil, Copy, Check } from "lucide-react";
+import { Mail, Phone, Shield, Camera, CheckCircle2, AlertCircle, Loader2, Pencil, Copy, Check, RefreshCw } from "lucide-react";
 import api from "../lib/axios";
 import { Avatar } from "../components/ui/avatar";
 import { btn, card, field, label } from "../lib/styles";
@@ -45,6 +45,8 @@ export const Settings = () => {
     const [usersError, setUsersError] = useState(false);
     const [savingUserId, setSavingUserId] = useState(null);
     const [copied, setCopied] = useState(false);
+    const [confirmRotate, setConfirmRotate] = useState(false);
+    const [rotating, setRotating] = useState(false);
     const fileInputRef = useRef(null);
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [profileLoading, setProfileLoading] = useState(false);
@@ -172,6 +174,20 @@ export const Settings = () => {
         }
     };
 
+    const handleRotateInvite = async () => {
+        setRotating(true);
+        try {
+            const res = await api.post('/auth/workspace/invite-code');
+            updateUser({ workspace: { ...user.workspace, inviteCode: res.data.inviteCode } });
+            setConfirmRotate(false);
+            toast.success("New invite code ready", "The previous code no longer works.");
+        } catch (err) {
+            toast.error("Couldn't change the code", errorMessage(err));
+        } finally {
+            setRotating(false);
+        }
+    };
+
     return (
         <div className="mx-auto max-w-3xl space-y-6 pb-12">
             <div className="border-b border-gray-200 pb-6">
@@ -285,13 +301,27 @@ export const Settings = () => {
                             <p className="text-xs text-gray-600" id="invite-code-label">Invite code</p>
                             <div className="mt-1 flex items-center gap-2">
                                 <span aria-labelledby="invite-code-label" className="select-all rounded-lg border border-gray-200 bg-white px-4 py-2 font-mono text-xl font-semibold tracking-[0.25em] text-gray-900">
-                                    {user?.workspace?.inviteCode || '------'}
+                                    {user?.workspace?.inviteCode || '--------'}
                                 </span>
                                 <button onClick={handleCopyInvite} className={btn.secondary} aria-label="Copy invite code">
                                     {copied ? <Check size={16} className="text-emerald-600" aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
                                     <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
                                 </button>
                             </div>
+                            {confirmRotate ? (
+                                <div role="group" aria-label="Confirm new invite code" className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-700">
+                                    <span>Anyone holding the current code won't be able to join.</span>
+                                    <button onClick={handleRotateInvite} disabled={rotating} className={`${btn.dangerSoft} px-2.5 py-1 text-xs`}>
+                                        {rotating ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+                                        Replace code
+                                    </button>
+                                    <button onClick={() => setConfirmRotate(false)} disabled={rotating} className={`${btn.ghost} px-2.5 py-1 text-xs`}>Cancel</button>
+                                </div>
+                            ) : (
+                                <button onClick={() => setConfirmRotate(true)} className="mt-2 text-xs font-medium text-indigo-700 underline-offset-4 hover:underline">
+                                    Generate a new code
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

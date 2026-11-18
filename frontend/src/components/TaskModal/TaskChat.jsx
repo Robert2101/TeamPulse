@@ -23,14 +23,15 @@ export const TaskChat = ({ task, project, socket, user }) => {
 
     const messagesEndRef = useRef(null);
 
+    // Leaving the task (or the panel) clears this user's typing indicator for everyone else.
+    const projectId = project?._id;
+    const taskId = task._id;
     useEffect(() => {
         return () => {
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-            if (socket && project?._id) {
-                socket.emit("stop-typing", { projectId: project._id, taskId: task._id, userName: user?.fullName });
-            }
+            if (socket && projectId) socket.emit("stop-typing", { projectId, taskId });
         };
-    }, []);
+    }, [socket, projectId, taskId]);
 
     // Scroll only the message list; scrollIntoView would also scroll the stacked panel on small screens.
     const scrollToBottom = () => {
@@ -96,14 +97,15 @@ export const TaskChat = ({ task, project, socket, user }) => {
             setComments(prev => prev.filter(c => c._id !== deletedCommentId));
         };
 
+        // The server stamps userId/userName from the session; skip our own events by id.
         const handleUserTyping = (data) => {
-            if (data.taskId === task._id && data.userName !== user?.fullName) {
+            if (data.taskId === task._id && data.userId !== user?._id) {
                 setTypingUsers(prev => prev.includes(data.userName) ? prev : [...prev, data.userName]);
             }
         };
 
         const handleUserStopTyping = (data) => {
-            if (data.taskId === task._id && data.userName !== user?.fullName) {
+            if (data.taskId === task._id && data.userId !== user?._id) {
                 setTypingUsers(prev => prev.filter(name => name !== data.userName));
             }
         };
@@ -121,27 +123,19 @@ export const TaskChat = ({ task, project, socket, user }) => {
             socket.off("user-typing", handleUserTyping);
             socket.off("user-stop-typing", handleUserStopTyping);
         };
-    }, [socket, task._id]);
+    }, [socket, task._id, user?._id]);
 
     // Handle input change & emit typing events
     const handleInputChange = (e) => {
         setNewComment(e.target.value);
         if (!socket || !project?._id) return;
 
-        socket.emit("typing", { 
-            projectId: project._id, 
-            taskId: task._id, 
-            userName: user?.fullName 
-        });
+        socket.emit("typing", { projectId: project._id, taskId: task._id });
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         
         typingTimeoutRef.current = setTimeout(() => {
-            socket.emit("stop-typing", { 
-                projectId: project._id, 
-                taskId: task._id, 
-                userName: user?.fullName 
-            });
+            socket.emit("stop-typing", { projectId: project._id, taskId: task._id });
         }, 2000);
     };
 
@@ -151,7 +145,7 @@ export const TaskChat = ({ task, project, socket, user }) => {
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         if (socket && project?._id) {
-            socket.emit("stop-typing", { projectId: project._id, taskId: task._id, userName: user?.fullName });
+            socket.emit("stop-typing", { projectId: project._id, taskId: task._id });
         }
 
         const commentText = newComment.trim() || (commentFile ? "Attached a file" : "");
