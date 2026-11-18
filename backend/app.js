@@ -15,6 +15,11 @@ import fileRoutes from './routes/file.route.js';
 // The Express app, without a listening server or database connection, so tests can import it directly.
 const app = express();
 
+// Behind a hosting proxy, req.ip is the proxy's address unless Express trusts it. Trust exactly
+// TRUST_PROXY hops (default 1 in production, none in development) so X-Forwarded-For can't be spoofed.
+const proxyHops = Number.parseInt(process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? '1' : '0'), 10);
+app.set('trust proxy', Number.isNaN(proxyHops) ? 0 : proxyHops);
+
 app.use(cors({
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
     credentials: true, // MUST BE TRUE to allow cookies

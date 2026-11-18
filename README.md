@@ -466,10 +466,12 @@ Writes follow a strict order: **persist to MongoDB first, invalidate Redis secon
 
 | Scope | Limit | Identifier |
 |---|---|---|
-| Auth endpoints | 10 / 15 min | IP |
+| Auth endpoints | 10 / 15 min | Client IP |
 | Chatbot `/ask` | 20 / 1 h | User ID |
-| File uploads | 30 / 15 min | IP |
-| File reads/deletes | 100 / 15 min | IP |
+| File uploads | 30 / 15 min | User ID |
+| File reads/deletes | 100 / 15 min | User ID |
+
+Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` hops (default 1 in production), so users behind the host's proxy get separate buckets and a client can't dodge limits by sending its own `X-Forwarded-For`.
 
 ---
 
@@ -528,6 +530,8 @@ UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_rest_token
 
 CLIENT_URL=http://localhost:5173
+# Proxy hops in front of the API; defaults to 1 in production, 0 otherwise
+# TRUST_PROXY=1
 
 CLOUDINARY_CLOUD_NAME=<cloud name>
 CLOUDINARY_API_KEY=<api key>

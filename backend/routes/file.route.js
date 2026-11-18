@@ -2,30 +2,22 @@ import express from 'express';
 import { protectRoute } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/upload.middleware.js';
 import { uploadFile, getFilesByEntity, deleteFile } from '../controllers/file.controller.js';
-import { checkRateLimit } from '../config/redis.js';
+import { rateLimit } from '../middleware/rateLimit.middleware.js';
 
 const router = express.Router();
 
-const fileUploadLimiter = async (req, res, next) => {
-    const identifier = req.ip || req.headers['x-forwarded-for'] || 'anonymous';
-    const limitResult = await checkRateLimit(`file:upload:${identifier}`, 30, "15 m");
-    if (!limitResult.success) {
-        return res.status(429).json({ message: 'Too many file upload requests. Please try again later.' });
-    }
-    next();
-};
+// Keyed per account (after protectRoute) so people sharing an office or proxy IP don't share a bucket.
+const fileUploadLimiter = rateLimit({
+    name: 'file:upload', limit: 30, window: '15 m', keyBy: 'user',
+    message: 'Too many file upload requests. Please try again later.',
+});
+const fileReadLimiter = rateLimit({
+    name: 'file:read', limit: 100, window: '15 m', keyBy: 'user',
+    message: 'Too many requests. Please try again later.',
+});
 
-const fileReadLimiter = async (req, res, next) => {
-    const identifier = req.ip || req.headers['x-forwarded-for'] || 'anonymous';
-    const limitResult = await checkRateLimit(`file:read:${identifier}`, 100, "15 m");
-    if (!limitResult.success) {
-        return res.status(429).json({ message: 'Too many requests. Please try again later.' });
-    }
-    next();
-};
-
-router.post('/upload', fileUploadLimiter, protectRoute, upload.single('file'), uploadFile);
-router.get('/', fileReadLimiter, protectRoute, getFilesByEntity);
-router.delete('/:fileId', fileReadLimiter, protectRoute, deleteFile);
+router.post('/upload', protectRoute, fileUploadLimiter, upload.single('file'), uploadFile);
+router.get('/', protectRoute, fileReadLimiter, getFilesByEntity);
+router.delete('/:fileId', protectRoute, fileReadLimiter, deleteFile);
 
 export default router;
