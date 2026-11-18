@@ -47,6 +47,8 @@ const ProtectedLayout = () => {
 
 export default function App() {
   const { user, isAuthChecking, checkAuth } = useStore();
+  // Same rule as the API and the sidebar: the audit log is for Admins and Project Managers.
+  const canReadAuditLog = user?.role?.viewReports && ["Admin", "Project Manager"].includes(user?.role?.roleName);
 
   useEffect(() => {
     checkAuth();
@@ -72,7 +74,7 @@ export default function App() {
           <Route path="/project/:id" element={<ProjectBoard />} />
           <Route path="/tasks" element={<MyTasks />} />
           <Route path="/ai-chat" element={<AiChat />} />
-          <Route path="/activity" element={user?.role?.viewReports ? <ActivityLog /> : <Navigate to="/projects" replace />} />
+          <Route path="/activity" element={canReadAuditLog ? <ActivityLog /> : <Navigate to="/projects" replace />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
 

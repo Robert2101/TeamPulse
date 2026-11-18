@@ -444,7 +444,7 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/:entityId` | Audit trail for a project (resolves its tasks/comments). Latest 100, 30 s cache, membership required |
+| GET | `/:entityId` | Audit trail for a project (resolves its tasks/comments). Latest 100, 30 s cache. Admins, and Project Managers with access to the project |
 
 ### AI Assistant — `/chatbot`
 
@@ -491,7 +491,7 @@ Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` ho
 
 - **Grounding** — the system instruction embeds only the caller's own active projects and pending tasks (formatted summaries, never raw dumps), with explicit anti-hallucination and prompt-injection defenses.
 - **Memory** — the last 4 persisted interactions are replayed as conversation context; up to 20 are retrievable via `/history`.
-- **Function calling** — the model can invoke `update_task_status(taskId, newStatus)`. Execution is guarded by `findOneAndUpdate({ _id, assignee: userId, workspace })`, so the AI can never touch someone else's tasks or cross tenants. Successful tool runs propagate the full side-effect chain: cache invalidation, `task-updated` broadcast, and activity logging with `source: 'chatbot'`.
+- **Function calling** — the model can invoke `update_task_status(taskId, newStatus)`. The status is validated against the board's columns first, and the update runs with the filter `{ _id, assignee: userId, workspace }`, so the AI can never touch someone else's tasks or cross tenants. It shares `applyTaskUpdate` with the REST API: schema validators, `completedAt`, cache invalidation, a populated `task-updated` broadcast, and an audit entry with `source: 'chatbot'`.
 - **Persistence** — every exchange is saved to `ChatbotInteraction` with a classified intent for analytics.
 
 ---

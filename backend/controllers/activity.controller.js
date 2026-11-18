@@ -23,7 +23,9 @@ export const getActivityLogs = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. Project belongs to another workspace." });
         }
 
-        if (!canAccessProject(project, req.dbUser)) {
+        // The audit log is a management tool: Admins, and Project Managers on projects they can access.
+        const isManagerRole = ['Admin', 'Project Manager'].includes(req.dbUser.role?.roleName);
+        if (!isManagerRole || !canAccessProject(project, req.dbUser)) {
             logger.warn(`Security Alert: User ${req.dbUser.emailAddress} attempted to read logs of an unauthorized project.`);
             return res.status(403).json({ message: "Access Denied." });
         }
