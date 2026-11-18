@@ -2,11 +2,13 @@ import Project from '../models/project.model.js';
 import User from '../models/user.model.js';
 import logger from '../utils/logger.js';
 import Task from '../models/task.model.js';
-import Comment from '../models/comment.model.js';
+import FileAsset from '../models/fileAsset.model.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getCache, setCache, delCache, delWorkspaceCacheKeys } from '../config/redis.js';
 import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 import { pick } from '../utils/pick.js';
+import { withTransaction } from '../utils/transaction.js';
+import { deleteTasksCascade, destroyStoredFiles } from '../services/cleanup.service.js';
 
 // Fields a PUT may change; only Admins may also reassign the Project Manager.
 const PROJECT_FIELDS = [
@@ -215,16 +217,21 @@ export const deleteProject = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can delete this project." });
         }
 
-        await Project.findByIdAndDelete(id);
+        // Project, tasks, comments and file records go together or not at all
+        const { taskIds, files } = await withTransaction(async (session) => {
+            const tasks = await Task.find({ projectReference: id, workspace: req.dbUser.workspace }).select('_id').session(session).lean();
+            const taskIds = tasks.map(task => task._id);
+            const taskFiles = await deleteTasksCascade(taskIds, session);
 
-        const tasks = await Task.find({ projectReference: id, workspace: req.dbUser.workspace });
-        const taskIds = tasks.map(task => task._id);
+            const projectFiles = await FileAsset.find({ entityType: 'Project', entityId: id }).session(session).lean();
+            await FileAsset.deleteMany({ entityType: 'Project', entityId: id }, { session });
+            await Project.deleteOne({ _id: id, workspace: req.dbUser.workspace }, { session });
 
-        await Task.deleteMany({ projectReference: id });
+            return { taskIds, files: [...taskFiles, ...projectFiles] };
+        });
 
-        if (taskIds.length > 0) {
-            await Comment.deleteMany({ task: { $in: taskIds } });
-        }
+        // Stored files can only be removed after the commit
+        await destroyStoredFiles(files);
 
         const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
 

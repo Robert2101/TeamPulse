@@ -8,10 +8,15 @@ import mongoose from 'mongoose';
 import { delCache } from '../config/redis.js';
 import { authCookieOptions, issueSession, revokeSessions } from '../utils/session.js';
 import { csrfTokenFor } from '../middleware/csrf.middleware.js';
+import { withTransaction } from '../utils/transaction.js';
 
 export const signup = async (req, res) => {
     try {
         const { fullName, emailAddress, password, isCreatingWorkspace, workspaceName, inviteCode } = req.body;
+
+        if (!fullName?.trim() || !emailAddress?.trim() || !password) {
+            return res.status(400).json({ message: "Name, email and password are required" });
+        }
 
         const existingUser = await User.findOne({ emailAddress });
         if (existingUser) return res.status(400).json({ message: "User already exists" });
@@ -21,25 +26,20 @@ export const signup = async (req, res) => {
 
         let workspaceId;
         let roleId;
+        let newWorkspace = null;
 
         // Generate a new User ID ahead of time so the Workspace can reference it
         const newUserId = new mongoose.Types.ObjectId();
 
         if (isCreatingWorkspace) {
-            if (!workspaceName) return res.status(400).json({ message: "Workspace name is required" });
+            if (!workspaceName?.trim()) return res.status(400).json({ message: "Workspace name is required" });
 
             const adminRole = await Role.findOne({ roleName: 'Admin' });
             roleId = adminRole._id;
 
-            // Generate workspace ID beforehand
+            // Generate workspace ID beforehand; the workspace is created together with its owner below
             workspaceId = new mongoose.Types.ObjectId();
-
-            // Create workspace directly with the pre-generated User ID as the owner
-            await Workspace.create({
-                _id: workspaceId,
-                workspaceName,
-                owner: newUserId
-            });
+            newWorkspace = { _id: workspaceId, workspaceName, owner: newUserId };
 
         } else {
             if (!inviteCode) return res.status(400).json({ message: "Invite code is required to join" });
@@ -54,18 +54,27 @@ export const signup = async (req, res) => {
             workspaceId = workspace._id;
         }
 
-        // Create the user with the pre-generated ID
-        const newUser = await User.create({
-            _id: newUserId,
-            fullName,
-            emailAddress,
-            password: hashedPassword,
-            role: roleId,
-            workspace: workspaceId
+        // Workspace and owner commit together: a failed user insert (e.g. a duplicate-email race)
+        // can no longer leave an orphan workspace behind.
+        await withTransaction(async (session) => {
+            if (newWorkspace) {
+                await Workspace.create([newWorkspace], { session });
+            }
+            await User.create([{
+                _id: newUserId,
+                fullName,
+                emailAddress,
+                password: hashedPassword,
+                role: roleId,
+                workspace: workspaceId
+            }], { session });
         });
 
         res.status(201).json({ message: "User registered successfully" });
     } catch (error) {
+        if (error.code === 11000 && error.keyPattern?.emailAddress) {
+            return res.status(400).json({ message: "User already exists" });
+        }
         logger.error(`Signup Error: ${error.message}`);
         res.status(500).json({ message: "Error creating user" });
     }

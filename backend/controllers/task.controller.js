@@ -1,6 +1,5 @@
 import Task from '../models/task.model.js';
 import Project from '../models/project.model.js';
-import Comment from '../models/comment.model.js';
 import logger from '../utils/logger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
@@ -8,6 +7,8 @@ import { getCache, setCache, delCache } from '../config/redis.js';
 import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 import { pick } from '../utils/pick.js';
 import { applyTaskUpdate } from '../services/task.service.js';
+import { withTransaction } from '../utils/transaction.js';
+import { deleteTasksCascade, destroyStoredFiles } from '../services/cleanup.service.js';
 
 // Fields a PATCH may change. Members of a project may only move tasks between columns.
 const MANAGER_TASK_FIELDS = ['taskName', 'taskDescription', 'assignee', 'dueDate', 'priority', 'taskStatus'];
@@ -224,8 +225,9 @@ export const deleteTask = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can delete tasks." });
         }
 
-        await Task.findByIdAndDelete(id);
-        await Comment.deleteMany({ task: id });
+        // Task, its comments and their file records go together; stored files after the commit
+        const files = await withTransaction((session) => deleteTasksCascade([task._id], session));
+        await destroyStoredFiles(files);
 
         const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
 
