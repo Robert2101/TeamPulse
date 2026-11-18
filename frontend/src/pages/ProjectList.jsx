@@ -98,7 +98,7 @@ export const ProjectList = () => {
 
                                         {/* Overlapping Team Avatars */}
                                         {team.length > 0 && (
-                                            <div className="flex shrink-0 -space-x-2" aria-label={`${team.length} team member${team.length === 1 ? "" : "s"}`}>
+                                            <div className="flex shrink-0 -space-x-1" aria-label={`${team.length} team member${team.length === 1 ? "" : "s"}`}>
                                                 {displayTeam.map((member) => (
                                                     <Avatar key={member._id} name={member.fullName} src={member.profilePicture} size="sm" ring />
                                                 ))}
