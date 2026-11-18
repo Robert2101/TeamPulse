@@ -22,9 +22,9 @@ export const PEOPLE = {
 
 // Static files served by the frontend (frontend/public/demo). Sizes are the real file sizes.
 export const FILES = {
-    homeFeed: { name: 'home-feed-v3.png', fileType: 'image/png', path: '/demo/home-feed-v3.png', size: 84213 },
-    apiSpec: { name: 'partner-api-reference.pdf', fileType: 'application/pdf', path: '/demo/partner-api-reference.pdf', size: 46518 },
-    qaChecklist: { name: 'rebooking-qa-checklist.txt', fileType: 'text/plain', path: '/demo/rebooking-qa-checklist.txt', size: 1012 },
+    homeFeed: { name: 'home-feed-v3.png', fileType: 'image/png', path: '/demo/home-feed-v3.png', size: 119768 },
+    apiSpec: { name: 'partner-api-reference.pdf', fileType: 'application/pdf', path: '/demo/partner-api-reference.pdf', size: 64872 },
+    qaChecklist: { name: 'rebooking-qa-checklist.txt', fileType: 'text/plain', path: '/demo/rebooking-qa-checklist.txt', size: 890 },
 };
 
 export const PROJECTS = [
