@@ -6,6 +6,10 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL
     : import.meta.env.MODE === "production" ? undefined : "http://localhost:5001";
 
+// Hosts that proxy the API but not WebSockets (Vercel rewrites) set VITE_SOCKET_TRANSPORTS=polling.
+const TRANSPORTS = (import.meta.env.VITE_SOCKET_TRANSPORTS || "polling,websocket")
+    .split(",").map((t) => t.trim()).filter(Boolean);
+
 /**
  * One socket per project. It is created idle, connected while the caller is mounted, and
  * (re)joins the project's room on every connect, so a dropped network doesn't silently stop updates.
@@ -13,7 +17,7 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
  */
 export const useSocket = (projectId) => {
     const socket = useMemo(
-        () => (projectId ? io(SOCKET_URL, { withCredentials: true, autoConnect: false }) : null),
+        () => (projectId ? io(SOCKET_URL, { withCredentials: true, autoConnect: false, transports: TRANSPORTS }) : null),
         [projectId]
     );
 
