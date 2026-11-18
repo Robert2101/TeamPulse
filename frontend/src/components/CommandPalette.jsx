@@ -57,7 +57,7 @@ export const CommandPalette = () => {
                                         onSelect={() => run(() => navigate(`/project/${task.projectReference}?task=${task._id}`))}
                                     >
                                         <span className={cn("size-2 rounded-full", TASK_STATUS_DOT[task.taskStatus])} aria-hidden="true" />
-                                        {key && <span className="w-14 shrink-0 font-mono text-xs text-gray-500">{key}</span>}
+                                        {key && <span className="w-14 shrink-0 tabular text-xs text-gray-500">{key}</span>}
                                         <span className="min-w-0 flex-1 truncate">{task.taskName}</span>
                                         <span className="hidden shrink-0 text-xs text-gray-500 sm:block">{project?.projectName}</span>
                                     </CommandItem>
@@ -83,7 +83,7 @@ export const CommandPalette = () => {
                         <CommandGroup heading="Projects">
                             {projects.map((project) => (
                                 <CommandItem key={project._id} value={`project ${project.key ?? ""} ${project.projectName}`} onSelect={() => run(() => navigate(`/project/${project._id}`))}>
-                                    <span className="flex h-5 min-w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 px-1 font-mono text-[11px] font-medium text-gray-600">{project.key ?? "—"}</span>
+                                    <span className="flex h-5 min-w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 px-1 tabular text-[11px] font-medium text-gray-600">{project.key ?? "—"}</span>
                                     <span className="min-w-0 flex-1 truncate">{project.projectName}</span>
                                     <CommandShortcut>{project.projectStatus}</CommandShortcut>
                                 </CommandItem>

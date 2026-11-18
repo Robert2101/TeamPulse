@@ -118,7 +118,7 @@ export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, on
                                                 className={cn(rowBase, "group", collapsed && "justify-center px-0", isActive ? rowActive : rowIdle)}
                                             >
                                                 <span className={cn(
-                                                    "flex h-5 min-w-8 shrink-0 items-center justify-center rounded-md px-1 font-mono text-[10.5px] font-medium",
+                                                    "flex h-5 min-w-8 shrink-0 items-center justify-center rounded-md px-1 tabular text-[10.5px] font-medium",
                                                     isActive ? "bg-indigo-50 text-indigo-700" : "bg-gray-200/70 text-gray-600"
                                                 )}>
                                                     {project.key ?? project.projectName?.slice(0, 3).toUpperCase()}

@@ -289,7 +289,7 @@ export const ProjectBoard = () => {
                         <ArrowLeft size={16} aria-hidden="true" /> All projects
                     </Link>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        {project.key && <span className="rounded-md bg-gray-900 px-1.5 py-0.5 font-mono text-xs font-medium text-white">{project.key}</span>}
+                        {project.key && <span className="rounded-md bg-gray-900 px-1.5 py-0.5 tabular text-xs font-medium text-white">{project.key}</span>}
                         <h1 className="line-clamp-3 min-w-0 text-2xl font-semibold tracking-tight text-gray-900 wrap-anywhere sm:text-3xl">{project.projectName}</h1>
                         <ProjectStatusBadge status={project.projectStatus} />
                     </div>
@@ -458,7 +458,7 @@ export const ProjectBoard = () => {
                                                 >
                                                     <div className="mb-2 flex items-center gap-2">
                                                         <PriorityIcon priority={task.priority} />
-                                                        {taskKey(task, project) && <span className="font-mono text-[11px] font-medium text-gray-500">{taskKey(task, project)}</span>}
+                                                        {taskKey(task, project) && <span className="tabular text-[11px] font-medium text-gray-500">{taskKey(task, project)}</span>}
                                                         <span className="ml-auto">
                                                             {assignee
                                                                 ? <Avatar name={assignee.fullName} src={assignee.profilePicture} size="xs" />

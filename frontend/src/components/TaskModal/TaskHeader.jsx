@@ -92,7 +92,7 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
         <div className="flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4 sm:px-8 sm:py-5">
             <div className="min-w-0 flex-1">
                 <p className="mb-1.5 flex min-w-0 items-center gap-2 text-xs text-gray-500">
-                    {key && <span className="font-mono font-medium text-gray-600">{key}</span>}
+                    {key && <span className="tabular font-medium text-gray-600">{key}</span>}
                     {key && <span aria-hidden="true">·</span>}
                     <span className="truncate">{project?.projectName}</span>
                 </p>
