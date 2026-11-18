@@ -14,14 +14,14 @@ import { PREVIEW_ROLES } from "../../lib/demo";
 // This figure is a fragment of the real interface (data-ui): it keeps the app's own rules, card shadow,
 // keyboard hint and brand accent, exactly as the board renders them.
 const UI = {
-    cardShadow: "shadow-[0_1px_2px_rgba(15,23,42,0.05)]", // taste-skill-ignore: app card
-    ruleR: "border-r border-gray-200", // taste-skill-ignore: app sidebar edge
-    ruleB: "border-b border-gray-200", // taste-skill-ignore: app header edge
-    ruleT: "border-t border-gray-200", // taste-skill-ignore: app activity bar edge
-    mono: "font-mono", // taste-skill-ignore: keyboard shortcut, literal key names
-    accentIcon: "text-indigo-600", // taste-skill-ignore: brand accent, active nav
-    accentChip: "bg-indigo-50 text-indigo-700", // taste-skill-ignore: brand accent, current project
-    accentButton: "bg-indigo-600 text-white", // taste-skill-ignore: brand primary action
+    cardShadow: "shadow-[0_1px_2px_rgba(15,23,42,0.05)]", // app card
+    ruleR: "border-r border-gray-200", // app sidebar edge
+    ruleB: "border-b border-gray-200", // app header edge
+    ruleT: "border-t border-gray-200", // app activity bar edge
+    mono: "font-mono", // keyboard shortcut, literal key names
+    accentIcon: "text-indigo-600", // brand accent, active nav
+    accentChip: "bg-indigo-50 text-indigo-700", // brand accent, current project
+    accentButton: "bg-indigo-600 text-white", // brand primary action
 };
 
 const COLUMNS = ["To-Do", "In-Progress", "Review", "Done"];

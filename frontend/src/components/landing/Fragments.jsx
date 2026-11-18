@@ -8,13 +8,13 @@ import { cn } from "../../lib/utils";
 // Each is a figure: screen readers get the caption, the visual detail is hidden from them.
 // Inside data-ui the app keeps its own furniture: the rules, the brand accent and the small UI sizes.
 const UI = {
-    headRule: "border-b border-gray-100", // taste-skill-ignore: app panel header edge
-    rowRule: "divide-y divide-gray-100", // taste-skill-ignore: app list rows
-    bubble: "border border-gray-200", // taste-skill-ignore: app chat bubble
-    thread: "w-px bg-gray-200", // taste-skill-ignore: audit log timeline
-    unassigned: "border border-dashed border-gray-300", // taste-skill-ignore: app's unassigned avatar
-    accentText: "text-indigo-600", // taste-skill-ignore: brand accent, assistant
-    accentBubble: "bg-indigo-600 text-white", // taste-skill-ignore: brand accent, your own message
+    headRule: "border-b border-gray-100", // app panel header edge
+    rowRule: "divide-y divide-gray-100", // app list rows
+    bubble: "border border-gray-200", // app chat bubble
+    thread: "w-px bg-gray-200", // audit log timeline
+    unassigned: "border border-dashed border-gray-300", // app's unassigned avatar
+    accentText: "text-indigo-600", // brand accent, assistant
+    accentBubble: "bg-indigo-600 text-white", // brand accent, your own message
 };
 
 const Frame = ({ caption, className, children }) => (

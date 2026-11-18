@@ -12,8 +12,8 @@ import { btn } from "../lib/styles";
 import { cn } from "../lib/utils";
 
 // Rules belong to the real permissions table.
-const HEAD_RULE = "border-b border-gray-200"; // taste-skill-ignore: table rule
-const ROW_RULE = "border-b border-gray-100"; // taste-skill-ignore: table rule
+const HEAD_RULE = "border-b border-gray-200"; // table rule
+const ROW_RULE = "border-b border-gray-100"; // table rule
 
 const REPO_URL = "https://github.com/Robert2101/TeamPulse";
 const API_ORIGIN = import.meta.env.VITE_API_URL || (import.meta.env.MODE === "production" ? "" : "http://localhost:5001");
