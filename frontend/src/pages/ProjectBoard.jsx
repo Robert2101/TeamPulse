@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Calendar, Lock, RotateCw } from "lucide-react";
 
 import api from "../lib/axios";
 import { useSocket } from "../hooks/useSocket";
 import { CreateTaskModal } from "../components/CreateTaskModal";
-import { TaskDetailsModal } from "../components/TaskModal/TaskDetailsModal";
 import { ManageTeamModal } from "../components/ManageTeamModal";
 import { EditProjectModal } from "../components/EditProjectModal";
-import { AssetsHub } from "./AssetsHub";
 import { useStore } from "../store/useStore";
 import { Avatar } from "../components/ui/avatar";
 import { PriorityBadge, ProjectStatusBadge } from "../components/ui/badges";
@@ -18,6 +16,11 @@ import { toast } from "../lib/toast";
 import { btn } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { gsap, Flip, prefersReducedMotion } from "../lib/motion";
+
+// The task panel and the files tab bring in the comment thread and react-dropzone: load them on demand.
+const loadTaskPanel = () => import("../components/TaskModal/TaskDetailsModal");
+const TaskDetailsModal = lazy(() => loadTaskPanel().then((m) => ({ default: m.TaskDetailsModal })));
+const AssetsHub = lazy(() => import("./AssetsHub").then((m) => ({ default: m.AssetsHub })));
 
 const COLUMNS = ["To-Do", "In-Progress", "Review", "Done"];
 const idOf = (v) => (v && typeof v === "object" ? v._id : v)?.toString();
@@ -52,6 +55,8 @@ export const ProjectBoard = () => {
     const flipStateRef = useRef(null);
     const tasksRef = useRef(tasks);
     useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+    // Warm the task panel chunk so the first card click opens instantly.
+    useEffect(() => { loadTaskPanel(); }, []);
 
     const captureLayout = useCallback(() => {
         if (!boardRef.current || prefersReducedMotion()) return;
@@ -275,7 +280,9 @@ export const ProjectBoard = () => {
 
             {/* Tab Content */}
             {activeTab === "assets" ? (
-                <AssetsHub project={project} socket={socket} />
+                <Suspense fallback={<div className="h-64 animate-pulse rounded-2xl bg-gray-100" role="status" aria-label="Loading files" />}>
+                    <AssetsHub project={project} socket={socket} />
+                </Suspense>
             ) : (
                 <div ref={boardRef} className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 md:mx-0 md:snap-none md:px-0">
                     {COLUMNS.map((status) => {
@@ -358,6 +365,7 @@ export const ProjectBoard = () => {
             )}
 
             {selectedTask && (
+                <Suspense fallback={null}>
                 <TaskDetailsModal
                     task={selectedTask}
                     project={project}
@@ -368,6 +376,7 @@ export const ProjectBoard = () => {
                     onTaskUpdated={mergeTask}
                     onTaskDeleted={(taskId) => { captureLayout(); setTasks(prev => prev.filter(t => t._id !== taskId)); setSelectedTaskId(null); }}
                 />
+                </Suspense>
             )}
         </div>
     );
