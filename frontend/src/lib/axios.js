@@ -1,14 +1,15 @@
 import axios from "axios";
+import { withCsrf } from "./csrf";
 
 // Determine base URL depending on environment
 const baseURL = import.meta.env.VITE_API_URL 
     ? `${import.meta.env.VITE_API_URL}/api`
     : import.meta.env.MODE === "production" ? "/api" : "http://localhost:5001/api";
 
-const api = axios.create({
+const api = withCsrf(axios.create({
     baseURL,
-    withCredentials: true, 
-});
+    withCredentials: true,
+}));
 
 api.interceptors.response.use(
     res => res,

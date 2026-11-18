@@ -492,6 +492,7 @@ Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` ho
 |---|---|
 | Sessions | JWT (24 h) in `httpOnly` cookies; `secure` + `SameSite=None` in production, `Lax` in development. Tokens never exposed to JavaScript. Each token carries the user's `tokenVersion`; logout, a password change, a role change or deactivation bumps it, so older tokens (and their sockets) stop working immediately |
 | Transport | CORS locked to `CLIENT_URL` with credentials; Socket.IO handshake requires a valid cookie + live user account |
+| CSRF | State-changing requests must send `X-CSRF-Token`: an HMAC of the session (user + `tokenVersion`) returned by login and `check-auth`, which other origins can't read. Bodies must be JSON or multipart, so plain HTML forms can't post to the API |
 | Password storage | bcrypt (salt rounds 10); passwords excluded from all responses (`select('-password')`) |
 | Authorization | Dual-layer: route permission flags + controller ownership/membership checks; cross-tenant attempts return `403` and are logged |
 | Tenancy | Every query filtered by `workspace`; socket rooms enforce workspace + membership |
