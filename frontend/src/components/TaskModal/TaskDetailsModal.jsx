@@ -94,7 +94,7 @@ export const TaskDetailsModal = ({ task, project, onClose, socket, canMoveTasks,
                 <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
                     {/* Left: Task Details + Attachments */}
                     <div className="space-y-8 border-b border-gray-200 bg-gray-50 p-5 sm:p-8 lg:w-[40%] lg:overflow-y-auto lg:border-b-0 lg:border-r">
-                        <TaskDescription task={task} />
+                        <TaskDescription task={task} canEdit={canAssignMembers} onTaskUpdated={onTaskUpdated} />
                         <TaskAttachments
                             task={task}
                             socket={socket}
