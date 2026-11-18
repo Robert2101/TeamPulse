@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useSearchParams, Link } from "react-router-dom";
 import { ArrowLeft, Calendar, Lock, RotateCw } from "lucide-react";
 
 import api from "../lib/axios";
@@ -46,7 +46,19 @@ export const ProjectBoard = () => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
-    const [selectedTaskId, setSelectedTaskId] = useState(null);
+    // The open task lives in the URL (?task=<id>): links can be shared and survive a refresh.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const selectedTaskId = searchParams.get("task");
+    const setTaskParam = useCallback((taskId, onlyIfOpen) => {
+        setSearchParams((prev) => {
+            if (onlyIfOpen && prev.get("task") !== onlyIfOpen) return prev;
+            const next = new URLSearchParams(prev);
+            if (taskId) next.set("task", taskId); else next.delete("task");
+            return next;
+        }, { replace: true });
+    }, [setSearchParams]);
+    const openTask = (taskId) => setTaskParam(taskId);
+    const closeTask = useCallback(() => setTaskParam(null), [setTaskParam]);
     const [activeTab, setActiveTab] = useState("kanban"); // "kanban" | "assets"
     const [dragOverColumn, setDragOverColumn] = useState(null);
 
@@ -96,7 +108,6 @@ export const ProjectBoard = () => {
 
     useEffect(() => {
         setProject(null);
-        setSelectedTaskId(null);
         fetchBoardData();
     }, [fetchBoardData]);
 
@@ -122,7 +133,7 @@ export const ProjectBoard = () => {
         const onDeleted = ({ taskId }) => {
             if (tasksRef.current.some(t => t._id === taskId)) captureLayout();
             setTasks(prev => prev.filter(t => t._id !== taskId));
-            setSelectedTaskId(prev => (prev === taskId ? null : prev));
+            setTaskParam(null, taskId); // close the panel if it showed the deleted task
         };
 
         socket.on("task-updated", onUpdated);
@@ -134,7 +145,14 @@ export const ProjectBoard = () => {
             socket.off("task-created", onCreated);
             socket.off("task-deleted", onDeleted);
         };
-    }, [socket, mergeTask, captureLayout]);
+    }, [socket, mergeTask, captureLayout, setTaskParam]);
+
+    // A link to a task that is gone (deleted, or never on this board) closes with an explanation.
+    useEffect(() => {
+        if (loading || !selectedTaskId || tasks.some(t => t._id === selectedTaskId)) return;
+        toast.info("That task isn't on this board", "It may have been deleted, or the link points to another project.");
+        closeTask();
+    }, [loading, selectedTaskId, tasks, closeTask]);
 
     // --- FRONTEND RBAC (mirrors backend checks) ---
     const isAdmin = user?.role?.roleName === 'Admin';
@@ -326,8 +344,8 @@ export const ProjectBoard = () => {
                                                 <div
                                                     role="button"
                                                     tabIndex={0}
-                                                    onClick={() => setSelectedTaskId(task._id)}
-                                                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedTaskId(task._id); } }}
+                                                    onClick={() => openTask(task._id)}
+                                                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTask(task._id); } }}
                                                     aria-label={`${task.taskName}. ${task.priority} priority${task.dueDate ? `, due ${formatDate(task.dueDate)}` : ""}. Open details`}
                                                     className={cn(
                                                         "group rounded-xl border border-gray-200 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-[border-color,box-shadow] duration-150 hover:border-gray-300 hover:shadow-[0_4px_12px_-4px_rgba(15,23,42,0.12)]",
@@ -369,12 +387,12 @@ export const ProjectBoard = () => {
                 <TaskDetailsModal
                     task={selectedTask}
                     project={project}
-                    onClose={() => setSelectedTaskId(null)}
+                    onClose={closeTask}
                     socket={socket}
                     canMoveTasks={canMoveTasks}
                     onStatusChange={(status) => changeStatus(selectedTask._id, status)}
                     onTaskUpdated={mergeTask}
-                    onTaskDeleted={(taskId) => { captureLayout(); setTasks(prev => prev.filter(t => t._id !== taskId)); setSelectedTaskId(null); }}
+                    onTaskDeleted={(taskId) => { captureLayout(); setTasks(prev => prev.filter(t => t._id !== taskId)); closeTask(); }}
                 />
                 </Suspense>
             )}

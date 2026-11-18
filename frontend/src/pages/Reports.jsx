@@ -258,7 +258,7 @@ export const Reports = () => {
                             return (
                                 <li key={task._id}>
                                     <Link
-                                        to={`/project/${task.projectReference?._id || task.projectReference}`}
+                                        to={`/project/${task.projectReference?._id || task.projectReference}?task=${task._id}`}
                                         className="group flex flex-col gap-2 p-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-5"
                                     >
                                         <div className="min-w-0">
