@@ -7,6 +7,7 @@ import { getIO } from '../socket/socket.js';
 import { getCache, setCache, delCache } from '../config/redis.js';
 import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 import { pick } from '../utils/pick.js';
+import { applyTaskUpdate } from '../services/task.service.js';
 
 // Fields a PATCH may change. Members of a project may only move tasks between columns.
 const MANAGER_TASK_FIELDS = ['taskName', 'taskDescription', 'assignee', 'dueDate', 'priority', 'taskStatus'];
@@ -181,40 +182,24 @@ export const updateTask = async (req, res) => {
         }
 
         // S-04: allow-list the body so protected fields (and `$set`-style operators) can't be mass-assigned
-        const updateData = pick(req.body, canManageProject(project, req.dbUser) ? MANAGER_TASK_FIELDS : MEMBER_TASK_FIELDS);
-        updateData.updatedBy = req.dbUser._id;
+        const changes = pick(req.body, canManageProject(project, req.dbUser) ? MANAGER_TASK_FIELDS : MEMBER_TASK_FIELDS);
 
-        if (updateData.taskStatus === "Done") {
-            updateData.completedAt = new Date();
+        const updatedTask = await applyTaskUpdate({
+            filter: { _id: id, workspace: req.dbUser.workspace },
+            changes,
+            user: req.dbUser,
+        });
+        if (!updatedTask) {
+            return res.status(404).json({ message: "Task not found." });
         }
 
-        const updatedTask = await Task.findByIdAndUpdate(
-            id,
-            updateData,
-            { returnDocument: 'after', runValidators: true }
-        );
-
-        const populatedTask = await Task.findById(updatedTask._id)
-            .populate('assignee', 'fullName emailAddress')
-            .populate('updatedBy', 'fullName');
-
-        const workspaceId = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
-
-        // Write Mongo FIRST -> delete Redis cache SECOND
-        await delCache(`tasks:project:${task.projectReference}`);
-        await delCache(`dash:stats:${workspaceId}`);
-
-        await logActivity(req.dbUser._id, req.dbUser.workspace, `Updated Task to ${populatedTask.taskStatus}`, 'Task', populatedTask._id, {
-            taskName: populatedTask.taskName,
-            newStatus: populatedTask.taskStatus,
-            projectId: task.projectReference.toString()
-        });
-
-        logger.info(`Task updated: '${populatedTask.taskName}' (ID: ${id}) by User ID: ${req.dbUser._id}`);
-        getIO().to(populatedTask.projectReference.toString()).emit('task-updated', populatedTask);
-        res.status(200).json({ message: "Task updated successfully", task: populatedTask });
+        logger.info(`Task updated: '${updatedTask.taskName}' (ID: ${id}) by User ID: ${req.dbUser._id}`);
+        res.status(200).json({ message: "Task updated successfully", task: updatedTask });
 
     } catch (error) {
+        if (error.name === 'ValidationError' || error.name === 'CastError') {
+            return res.status(400).json({ message: error.message });
+        }
         logger.error(`Error updating task (ID: ${req.params.id}): ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: "Internal server error while updating task." });
     }
