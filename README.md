@@ -6,7 +6,9 @@
 
 TeamPulse lets organizations run their entire delivery operation inside isolated workspaces: role-based teams collaborate on live Kanban boards, discuss tasks in real time, manage files on a Cloudinary pipeline, and get answers from an AI assistant that reads — and safely acts on — their actual project data. Every layer is hardened for tenancy isolation, dual-layer RBAC, and performance under load.
 
-To try it, run it locally ([Docker](#run-with-docker) or [npm](#running-the-application)) and click **Explore the demo** on the landing page: it signs into a seeded sample workspace in one click, and a role picker opens it as an Admin, a Project Manager, a Team Member, or an Admin of a second company.
+**Live demo: [teampulseapp.vercel.app](https://teampulseapp.vercel.app)**. Click **Explore the demo** to sign into a seeded sample workspace in one click. A role picker also opens it as a Project Manager, a Team Member, or the Admin of a second company. The API runs at [`teampulse-backend-338f.onrender.com`](https://teampulse-backend-338f.onrender.com/api/health) (health check: `/api/health`).
+
+To run it yourself, use [Docker](#run-with-docker) or [npm](#running-the-application).
 
 ---
 
@@ -641,6 +643,14 @@ docker compose run --rm backend node seed.js   # wipes and seeds the bundled dat
 ## Deployment
 
 TeamPulse is two deployables: a static frontend and a containerized API with MongoDB.
+
+| Part | Host | URL |
+|---|---|---|
+| Frontend | Vercel | https://teampulseapp.vercel.app |
+| API + Socket.IO | Render | https://teampulse-backend-338f.onrender.com (health: `/api/health`) |
+| Database | MongoDB | configured through `MONGO_URI` on the API |
+
+For this deployment, `CLIENT_URL` on the API is `https://teampulseapp.vercel.app`, and `VITE_API_URL` on Vercel is `https://teampulse-backend-338f.onrender.com`.
 
 ### Frontend (Vercel)
 
