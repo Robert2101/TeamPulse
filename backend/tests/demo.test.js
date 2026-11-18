@@ -50,7 +50,7 @@ describe('demo sandboxes', () => {
         const theirProjects = await second.get('/api/projects');
         const projectId = theirProjects.body[0]._id;
         expect((await first.get(`/api/projects/${projectId}`)).status).toBe(404);
-        expect((await first.get(`/api/tasks/project/${projectId}`)).status).toBe(403);
+        expect((await first.get(`/api/tasks/project/${projectId}`)).status).toBe(404);
     });
 
     it('switches between the personas of the same sandbox only', async () => {
