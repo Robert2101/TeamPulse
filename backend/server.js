@@ -5,6 +5,7 @@ import app from './app.js';
 import { initSocket } from './socket/socket.js';
 import logger from './utils/logger.js';
 import { initRedis, startRedisKeepAlive } from './config/redis.js';
+import Workspace from './models/workspace.model.js';
 
 initRedis();
 startRedisKeepAlive(); // Keep the free-tier Upstash database from idling out
@@ -17,6 +18,8 @@ const PORT = process.env.PORT || 5001;
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         logger.info('Connected to MongoDB successfully');
+        // Drops indexes the schema no longer declares (the old unique index on workspaceName)
+        Workspace.syncIndexes().catch((err) => logger.warn(`Workspace index sync failed: ${err.message}`));
         httpServer.listen(PORT, () => logger.info(`Server is running on port ${PORT}`));
     })
     .catch((err) => logger.error(`MongoDB connection error: ${err.message}`));

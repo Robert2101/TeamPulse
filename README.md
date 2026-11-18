@@ -33,7 +33,7 @@ TeamPulse lets organizations run their entire delivery operation inside isolated
 
 ### 🏢 Multi-Tenant Workspaces
 - Two signup paths: **create a workspace** (creator becomes Admin) or **join via invite code** (joins land on the least-privileged Stakeholder role).
-- Auto-generated 6-character invite codes, surfaced in Settings with one-click copy.
+- Cryptographically random 8-character invite codes (no look-alike characters), shown to Admins in Settings with one-click copy and a "Generate a new code" action that retires the old one.
 - Every document — project, task, comment, file, activity — carries a `workspace` reference, and queries are tenant-scoped at the controller layer.
 
 ### 🔐 Four-Tier Role-Based Access Control
@@ -224,7 +224,7 @@ Update handlers copy only an allow-list of editable fields from the request body
 erDiagram
     WORKSPACE {
         ObjectId _id PK
-        string workspaceName UK
+        string workspaceName
         ObjectId owner FK
         string inviteCode UK
     }
@@ -351,7 +351,7 @@ erDiagram
     USER ||--o{ CHATBOT_INTERACTION : "asks"
 ```
 
-Indexes: unique on `User.emailAddress`, `Workspace.workspaceName`, `Workspace.inviteCode`, `Role.roleName`; compound index on `Comment (task, createdAt)`; indexed foreign keys across all collections.
+Indexes: unique on `User.emailAddress`, `Workspace.inviteCode`, `Role.roleName` (workspace names are not unique); compound index on `Comment (task, createdAt)`; indexed foreign keys across all collections.
 
 ---
 
@@ -386,11 +386,12 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 | POST | `/signup` | Body: `fullName`, `emailAddress`, `password` + either `isCreatingWorkspace: true, workspaceName` or `inviteCode`. Rate-limited 10 req / 15 min / IP |
 | POST | `/login` | Sets JWT httpOnly cookie (24 h). Rate-limited 10 req / 15 min / IP |
 | POST | `/logout` | Revokes every session of the account (bumps `tokenVersion`), clears the cookie and cached session |
-| GET | `/check-auth` | Returns hydrated user (role + workspace populated) |
+| GET | `/check-auth` | Returns hydrated user (role + workspace populated; invite code for Admins only) and the session's CSRF token |
 | PUT | `/profile` | Update name/email/phone/password |
 | GET | `/workspace/users` | All users in your workspace |
 | PUT | `/workspace/users/:userId/role` | Admin only; cannot modify own role |
 | PUT | `/workspace/users/:userId/status` | Admin only; Active ⇄ Inactive; cannot deactivate self |
+| POST | `/workspace/invite-code` | Admin only; replaces the invite code (the old one stops working) |
 
 ### Projects — `/projects`
 
