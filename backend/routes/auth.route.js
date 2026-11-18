@@ -1,5 +1,5 @@
 import express from 'express';
-import { signup, login, logout, checkAuth, getWorkspaceUsers, updateUserRole, updateUserStatus, updateProfile } from '../controllers/auth.controller.js';
+import { signup, login, logout, checkAuth, getWorkspaceUsers, updateUserRole, updateUserStatus, updateProfile, regenerateInviteCode } from '../controllers/auth.controller.js';
 import { protectRoute } from '../middleware/auth.middleware.js';
 import { rateLimit } from '../middleware/rateLimit.middleware.js';
 
@@ -22,5 +22,6 @@ router.put('/profile', protectRoute, updateProfile);
 router.get('/workspace/users', protectRoute, getWorkspaceUsers);
 router.put('/workspace/users/:userId/role', protectRoute, updateUserRole);
 router.put('/workspace/users/:userId/status', protectRoute, updateUserStatus);
+router.post('/workspace/invite-code', protectRoute, regenerateInviteCode);
 
 export default router;

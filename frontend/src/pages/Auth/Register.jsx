@@ -110,16 +110,16 @@ export const Register = () => {
                             id="inviteCode"
                             type="text"
                             required
-                            maxLength={6}
+                            maxLength={8}
                             autoComplete="off"
                             autoCapitalize="characters"
                             spellCheck={false}
-                            placeholder="A8X2L5"
+                            placeholder="K7QF2MXP"
                             className={`${field} h-11 font-mono uppercase tracking-[0.2em]`}
                             value={formData.inviteCode}
                             onChange={(e) => setFormData({ ...formData, inviteCode: e.target.value.toUpperCase().replace(/\s/g, "") })}
                         />
-                        <p className="mt-1.5 text-xs text-gray-600">Ask your workspace admin for the 6-character code. New members join as Stakeholders.</p>
+                        <p className="mt-1.5 text-xs text-gray-600">Ask your workspace admin for the invite code. New members join as Stakeholders.</p>
                     </div>
                 )}
 
