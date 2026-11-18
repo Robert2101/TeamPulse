@@ -84,17 +84,10 @@ export const getTasksByProject = async (req, res) => {
     try {
         const { projectId } = req.params;
 
-        // 1. MUST perform Project lookup & Workspace/RBAC authorization check FIRST
-        const project = await Project.findById(projectId);
+        // 1. Tenant-scoped lookup first: a project in another workspace answers exactly like one that doesn't exist.
+        const project = await Project.findOne({ _id: projectId, workspace: req.dbUser.workspace });
         if (!project) {
             return res.status(404).json({ message: "Project not found." });
-        }
-
-        const userWs = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
-        const projectWs = project.workspace?._id?.toString() || project.workspace?.toString();
-        if (userWs !== projectWs) {
-            logger.warn(`Cross-tenant security alert: User ${req.dbUser.emailAddress} attempted to access Project ${projectId} from another workspace.`);
-            return res.status(403).json({ message: "Access Denied. Project belongs to another workspace." });
         }
 
         if (!canAccessProject(project, req.dbUser)) {
