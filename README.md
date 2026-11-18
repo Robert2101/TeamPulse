@@ -194,7 +194,7 @@ Each project owns a room keyed by its Mongo `_id`. Clients join via `useSocket(p
 
 ### Anti-Mass-Assignment Protection (S-04)
 
-Update handlers strip protected fields (`_id`, `__v`, `workspace`, `createdBy`, `createdAt`) from request bodies; only Admins may reassign a project's manager. Team-member additions are resolved through per-user workspace validation — emails are looked up and must belong to the caller's workspace.
+Update handlers copy only an allow-list of editable fields from the request body, so protected fields (`_id`, `workspace`, `createdBy`, …) and update operators such as `$set` are ignored. Project members may change only a task's status; only Admins may reassign a project's manager, and the new manager must belong to the workspace. Team-member additions are resolved through per-user workspace validation — emails are looked up and must belong to the caller's workspace.
 
 ### Core Workflows
 
@@ -495,7 +495,7 @@ Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` ho
 | Password storage | bcrypt (salt rounds 10); passwords excluded from all responses (`select('-password')`) |
 | Authorization | Dual-layer: route permission flags + controller ownership/membership checks; cross-tenant attempts return `403` and are logged |
 | Tenancy | Every query filtered by `workspace`; socket rooms enforce workspace + membership |
-| Input hardening | Mass-assignment field stripping on updates; Mongoose enums/length validators; explicit payload validation in controllers |
+| Input hardening | Allow-listed fields on updates (no mass assignment); Mongoose enums/length validators; explicit payload validation in controllers |
 | File uploads | MIME whitelist, 50 MB cap, memory-only processing, forced `entityId` for avatar uploads, Cloudinary destroy via stored IDs |
 | Account lifecycle | Deactivated users are blocked at login, on every API request, and even on socket reconnect |
 | Observability | Winston structured logs (error + combined files in dev, JSON in prod); security alerts on privilege-escalation attempts |

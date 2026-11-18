@@ -6,6 +6,11 @@ import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
 import { getCache, setCache, delCache } from '../config/redis.js';
 import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
+import { pick } from '../utils/pick.js';
+
+// Fields a PATCH may change. Members of a project may only move tasks between columns.
+const MANAGER_TASK_FIELDS = ['taskName', 'taskDescription', 'assignee', 'dueDate', 'priority', 'taskStatus'];
+const MEMBER_TASK_FIELDS = ['taskStatus'];
 
 export const createTask = async (req, res) => {
     try {
@@ -159,7 +164,6 @@ export const getMyTasks = async (req, res) => {
 export const updateTask = async (req, res) => {
     try {
         const { id } = req.params;
-        const updateData = req.body;
 
         const task = await Task.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!task) {
@@ -176,22 +180,8 @@ export const updateTask = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You cannot update tasks in a project you do not belong to." });
         }
 
-        // S-04 FIX: Strip protected fields to prevent mass assignment attacks
-        delete updateData._id;
-        delete updateData.__v;
-        delete updateData.workspace;
-        delete updateData.createdBy;
-        delete updateData.createdAt;
-
-        if (!canManageProject(project, req.dbUser)) {
-            delete updateData.taskName;
-            delete updateData.taskDescription;
-            delete updateData.assignee;
-            delete updateData.dueDate;
-            delete updateData.priority;
-            delete updateData.projectReference;
-        }
-
+        // S-04: allow-list the body so protected fields (and `$set`-style operators) can't be mass-assigned
+        const updateData = pick(req.body, canManageProject(project, req.dbUser) ? MANAGER_TASK_FIELDS : MEMBER_TASK_FIELDS);
         updateData.updatedBy = req.dbUser._id;
 
         if (updateData.taskStatus === "Done") {
@@ -201,7 +191,7 @@ export const updateTask = async (req, res) => {
         const updatedTask = await Task.findByIdAndUpdate(
             id,
             updateData,
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         const populatedTask = await Task.findById(updatedTask._id)

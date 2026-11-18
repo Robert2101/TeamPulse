@@ -6,6 +6,13 @@ import Comment from '../models/comment.model.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getCache, setCache, delCache, delWorkspaceCacheKeys } from '../config/redis.js';
 import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
+import { pick } from '../utils/pick.js';
+
+// Fields a PUT may change; only Admins may also reassign the Project Manager.
+const PROJECT_FIELDS = [
+    'projectName', 'projectDescription', 'budget', 'clientName', 'startDate', 'endDate',
+    'priority', 'projectStatus', 'projectType', 'assignedTeamMembers',
+];
 
 export const createProject = async (req, res) => {
     try {
@@ -125,7 +132,6 @@ export const getAllProjects = async (req, res) => {
 export const updateProject = async (req, res) => {
     try {
         const { id } = req.params;
-        const updateData = req.body;
 
         const project = await Project.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!project) {
@@ -137,14 +143,15 @@ export const updateProject = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. Only the Project Manager or an Admin can update this project." });
         }
 
-        // S-04 FIX: Strip protected fields to prevent mass assignment attacks
-        delete updateData._id;
-        delete updateData.__v;
-        delete updateData.workspace;
-        delete updateData.createdBy;
-        delete updateData.createdAt;
-        if (req.dbUser.role.roleName !== 'Admin') {
-            delete updateData.projectManager; // Only admins can reassign PM
+        // S-04: allow-list the body so protected fields (and `$set`-style operators) can't be mass-assigned
+        const isAdmin = req.dbUser.role.roleName === 'Admin';
+        const updateData = pick(req.body, isAdmin ? [...PROJECT_FIELDS, 'projectManager'] : PROJECT_FIELDS);
+
+        if (updateData.projectManager) {
+            const newManager = await User.exists({ _id: updateData.projectManager, workspace: req.dbUser.workspace?._id || req.dbUser.workspace });
+            if (!newManager) {
+                return res.status(400).json({ message: "The new Project Manager must belong to your workspace." });
+            }
         }
 
         // Resolve emails to ObjectIds safely if frontend passes an array containing emails or user objects
@@ -173,7 +180,7 @@ export const updateProject = async (req, res) => {
         const updatedProject = await Project.findByIdAndUpdate(
             id,
             updateData,
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).populate('projectManager', 'fullName emailAddress profilePicture')
             .populate('assignedTeamMembers', 'fullName emailAddress profilePicture');
 
