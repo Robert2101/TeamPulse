@@ -610,6 +610,21 @@ cd frontend && npm run build   # outputs frontend/dist
 
 Serve `dist/index.html` for all routes and reverse-proxy `/api` and `/socket.io` to the backend process. With `VITE_API_URL` unset at build time, the frontend targets same-origin `/api` automatically; set `NODE_ENV=production` on the backend for `SameSite=None; Secure` cookies and JSON logging.
 
+### Run with Docker
+
+The whole stack (MongoDB 7 as a single-node replica set, the API, and the built frontend behind nginx) starts with one command:
+
+```bash
+cp backend/.env.example backend/.env     # once; add Cloudinary/Gemini/Upstash keys if you have them
+docker compose up --build                 # app on http://localhost:8080, API on http://localhost:5001
+docker compose run --rm backend node seed.js   # wipes and seeds the bundled database
+```
+
+- nginx serves the app and proxies `/api` and `/socket.io` to the API, so both share one origin.
+- Compose overrides `MONGO_URI` to the bundled database, so seeding never touches the database in your `.env`.
+- The API image is a multi-stage `node:24-alpine` build with production dependencies only, runs as the non-root `node` user, and has a `HEALTHCHECK` on `GET /api/health`.
+- `docker compose down -v` removes the containers and the database volume.
+
 ---
 
 ## Load Testing

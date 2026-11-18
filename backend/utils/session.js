@@ -7,12 +7,20 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 const isProduction = () => process.env.NODE_ENV === 'production';
 
-/** Options shared by setting and clearing the auth cookie (they must match for clearCookie to work). */
-export const authCookieOptions = () => ({
-    httpOnly: true,
-    secure: isProduction(),
-    sameSite: isProduction() ? 'none' : 'lax',
-});
+/**
+ * Options shared by setting and clearing the auth cookie (they must match for clearCookie to work).
+ * Production defaults to SameSite=None for a frontend on another site. When the app and API share a
+ * site (e.g. behind one proxy, as in docker compose) set COOKIE_SAME_SITE=lax; COOKIE_SECURE=false
+ * only for plain-http local stacks.
+ */
+export const authCookieOptions = () => {
+    const sameSite = process.env.COOKIE_SAME_SITE || (isProduction() ? 'none' : 'lax');
+    return {
+        httpOnly: true,
+        secure: sameSite === 'none' || (isProduction() && process.env.COOKIE_SECURE !== 'false'),
+        sameSite,
+    };
+};
 
 /** Signs a JWT bound to the user's current tokenVersion and sets it as the auth cookie. */
 export const issueSession = (res, user) => {
