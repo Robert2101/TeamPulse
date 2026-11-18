@@ -1,8 +1,10 @@
+import mongoose from 'mongoose';
 import { GoogleGenAI } from '@google/genai';
 import Project from '../models/project.model.js';
 import Task from '../models/task.model.js';
 import ChatbotInteraction from '../models/chatbotInteraction.model.js';
 import logger from '../utils/logger.js';
+import { applyTaskUpdate, TASK_STATUSES } from '../services/task.service.js';
 
 
 export const getChatHistory = async (req, res) => {
@@ -171,41 +173,24 @@ export const askChatbot = async (req, res) => {
                     isFunctionCall = true;
                     const call = chunk.functionCalls[0];
                     if (call.name === "update_task_status") {
-                        const { taskId, newStatus } = call.args;
+                        const { taskId, newStatus } = call.args ?? {};
+                        intent = "task_update";
                         try {
-                            // D-03 FIX: Scope to workspace for tenant isolation
-                            const userWs = req.dbUser.workspace?._id || req.dbUser.workspace;
-                            const updatedTask = await Task.findOneAndUpdate(
-                                { _id: taskId, assignee: userId, workspace: userWs }, 
-                                { taskStatus: newStatus, updatedBy: userId },
-                                { new: true } 
-                            );
-
-                            if (!updatedTask) {
-                                botReply = "I couldn't verify your permission to update this task, or the task doesn't exist.";
+                            // Model output is untrusted input: validate it before it reaches the database.
+                            if (!TASK_STATUSES.includes(newStatus)) {
+                                botReply = `I can only set a task to ${TASK_STATUSES.join(', ')}. Which of those did you mean?`;
                             } else {
-                                botReply = `Got it! I have successfully updated the status of "${updatedTask.taskName}" to ${updatedTask.taskStatus}.`;
-                                intent = "task_update";
-
-                                // D-03 FIX: Invalidate Redis cache, broadcast socket, log activity
-                                const { delCache } = await import('../config/redis.js');
-                                const { logActivity } = await import('../utils/activityLogger.js');
-                                const { getIO } = await import('../socket/socket.js');
-
-                                const wsId = userWs?._id?.toString() || userWs?.toString();
-                                const projectId = updatedTask.projectReference?.toString();
-
-                                await delCache(`tasks:project:${projectId}`);
-                                await delCache(`dash:stats:${wsId}`);
-
-                                getIO().to(projectId).emit('task-updated', updatedTask);
-
-                                await logActivity(userId, userWs, `Updated Task to ${newStatus}`, 'Task', updatedTask._id, {
-                                    taskName: updatedTask.taskName,
-                                    newStatus: updatedTask.taskStatus,
-                                    projectId,
-                                    source: 'chatbot'
+                                // Authorization lives in the filter: only the caller's own tasks, in their workspace.
+                                const updatedTask = mongoose.isValidObjectId(taskId) && await applyTaskUpdate({
+                                    filter: { _id: taskId, assignee: userId, workspace: req.dbUser.workspace?._id || req.dbUser.workspace },
+                                    changes: { taskStatus: newStatus },
+                                    user: req.dbUser,
+                                    source: 'chatbot',
                                 });
+
+                                botReply = updatedTask
+                                    ? `Got it! I have successfully updated the status of "${updatedTask.taskName}" to ${updatedTask.taskStatus}.`
+                                    : "I couldn't verify your permission to update this task, or the task doesn't exist.";
                             }
                         } catch (err) {
                             logger.error(`Tool Execution Error: ${err.message}`);
