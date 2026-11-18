@@ -83,7 +83,11 @@ export const uploadFile = async (req, res) => {
 
         const populated = await fileAsset.populate('uploadedBy', 'fullName');
 
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Uploaded File', entityType, finalEntityId, { fileName: req.file.originalname, fileId: fileAsset._id });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Uploaded File', entityType, finalEntityId, {
+            fileName: req.file.originalname,
+            fileId: fileAsset._id,
+            projectId: projectIdToBroadcast?.toString(),
+        });
 
         if (projectIdToBroadcast) {
             getIO().to(projectIdToBroadcast.toString()).emit('file-uploaded', { entityType, entityId: finalEntityId, file: populated });
@@ -155,7 +159,10 @@ export const deleteFile = async (req, res) => {
         }
 
         await FileAsset.findByIdAndDelete(fileId);
-        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted File', file.entityType, file.entityId, { fileName: file.name });
+        await logActivity(req.dbUser._id, req.dbUser.workspace, 'Deleted File', file.entityType, file.entityId, {
+            fileName: file.name,
+            projectId: projectIdToBroadcast?.toString(),
+        });
 
         if (projectIdToBroadcast) {
             getIO().to(projectIdToBroadcast.toString()).emit('file-deleted', { entityType: file.entityType, entityId: file.entityId, fileId });
