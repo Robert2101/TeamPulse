@@ -1,7 +1,7 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://teampulse-backend-338f.onrender.com/api/:path*" },
-    { "source": "/socket.io/:path*", "destination": "https://teampulse-backend-338f.onrender.com/socket.io/:path*" },
+    { "source": "/api/(.*)", "destination": "https://teampulse-backend-338f.onrender.com/api/$1" },
+    { "source": "/socket.io/(.*)", "destination": "https://teampulse-backend-338f.onrender.com/socket.io/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
