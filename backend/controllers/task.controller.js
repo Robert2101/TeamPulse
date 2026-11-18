@@ -6,6 +6,7 @@ import { getIO } from '../socket/socket.js';
 import { getCache, setCache, delCache } from '../config/redis.js';
 import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 import { pick } from '../utils/pick.js';
+import { accessibleProjectFilter } from './project.controller.js';
 import { applyTaskUpdate } from '../services/task.service.js';
 import { withTransaction } from '../utils/transaction.js';
 import { deleteTasksCascade, destroyStoredFiles } from '../services/cleanup.service.js';
@@ -253,5 +254,22 @@ export const deleteTask = async (req, res) => {
     } catch (error) {
         logger.error(`Error deleting task (ID: ${req.params.id}): ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: "Internal server error while deleting task." });
+    }
+};
+
+// GET /api/tasks/overview: every task in the projects the caller can see, trimmed for the overview
+// (progress per project, what needs attention, workload).
+export const getOverviewTasks = async (req, res) => {
+    try {
+        const filter = accessibleProjectFilter(req.dbUser);
+        const projectIds = (await Project.find(filter).select('_id').lean()).map((p) => p._id);
+        const tasks = await Task.find({ workspace: filter.workspace, projectReference: { $in: projectIds } })
+            .select('taskName number taskStatus priority dueDate assignee projectReference completedAt createdAt updatedAt')
+            .populate('assignee', 'fullName profilePicture jobTitle')
+            .lean();
+        res.status(200).json(tasks);
+    } catch (error) {
+        logger.error(`Error fetching overview tasks: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ message: "Internal server error while fetching tasks." });
     }
 };
