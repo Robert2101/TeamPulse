@@ -65,7 +65,7 @@ export function performLogin(baseUrl, email, password) {
  */
 export function performSetup() {
     const baseUrl = __ENV.BASE_URL || 'http://localhost:5001';
-    const email = __ENV.TEST_USER_EMAIL || 'tony@stark.com';
+    const email = __ENV.TEST_USER_EMAIL || 'maya@fernway.example';
     const password = __ENV.TEST_USER_PASSWORD || 'password123';
 
     // Step 1: Login (single request, rate-limit safe)
