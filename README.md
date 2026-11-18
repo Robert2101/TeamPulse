@@ -1,10 +1,12 @@
 # TeamPulse
 
+[![CI](https://github.com/Robert2101/TeamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Robert2101/TeamPulse/actions/workflows/ci.yml)
+
 **Real-time, multi-tenant project management platform built on the MERN stack.**
 
 TeamPulse lets organizations run their entire delivery operation inside isolated workspaces: role-based teams collaborate on live Kanban boards, discuss tasks in real time, manage files on a Cloudinary pipeline, and get answers from an AI assistant that reads — and safely acts on — their actual project data. Every layer is hardened for tenancy isolation, dual-layer RBAC, and performance under load.
 
-> Ditch the chaos. Experience project management that breathes with your team.
+To try it, run it locally ([Docker](#run-with-docker) or [npm](#running-the-application)) and click **Explore the demo** on the landing page: it signs into a seeded sample workspace in one click, and a role picker opens it as an Admin, a Project Manager, a Team Member, or an Admin of a second company.
 
 ---
 
@@ -24,8 +26,10 @@ TeamPulse lets organizations run their entire delivery operation inside isolated
 12. [Environment Variables](#environment-variables)
 13. [Installation & Setup](#installation--setup)
 14. [Running the Application](#running-the-application)
-15. [Load Testing](#load-testing)
-16. [Project Structure](#project-structure)
+15. [Deployment](#deployment)
+16. [Testing](#testing)
+17. [Load Testing](#load-testing)
+18. [Project Structure](#project-structure)
 
 ---
 
@@ -157,13 +161,18 @@ Each project owns a room keyed by its Mongo `_id`. Clients join via `useSocket(p
 | HTTP | Axios (401 interceptor → auto-logout) + native fetch (SSE chat stream) | 1.6 |
 | Real-time client | socket.io-client (custom `useSocket` hook) | 4.7 |
 | File drops | react-dropzone | 15.x |
-| Landing animations | ogl (WebGL shader hero) + lenis (smooth-scroll stack) — via react-bits | ogl 1.0, lenis 1.3 |
+| Motion | GSAP + Flip: board card moves, task panel, landing preview; every animation honours reduced motion | 3.15 |
+| Code splitting | Route-level `React.lazy`; the task panel and files tab load on demand | — |
 | Linting | ESLint 9 flat config + react-hooks/react-refresh plugins | 9.x |
 
 ### Testing & Deployment
 
 | Area | Tooling |
 |---|---|
+| API tests | Vitest + Supertest + mongodb-memory-server (replica set): tenant isolation, RBAC, sessions, CSRF, rate limits, sockets, AI tool |
+| End-to-end tests | Playwright smoke tests against the real app and a seeded throwaway database |
+| CI/CD | GitHub Actions: lint, build, API and E2E tests, Docker builds; the backend image is pushed to GHCR from `master` |
+| Containers | Multi-stage Docker images (API on `node:24-alpine`, frontend on nginx) and a `docker-compose.yml` for the whole stack |
 | Load testing | k6 (Grafana Labs) — 11 scenarios, custom `tp_*` metrics, threshold presets |
 | Frontend hosting | Vercel-ready SPA config (`vercel.json` rewrites) |
 
@@ -549,6 +558,8 @@ See [`backend/.env.example`](backend/.env.example).
 ```
 # Omit in production to hit same-origin /api (reverse-proxy setup)
 VITE_API_URL=http://localhost:5001
+# Hide the one-click demo accounts (landing page and sign-in page)
+# VITE_DEMO_ACCOUNTS=false
 ```
 
 ---
@@ -627,6 +638,61 @@ docker compose run --rm backend node seed.js   # wipes and seeds the bundled dat
 
 ---
 
+## Deployment
+
+TeamPulse is two deployables: a static frontend and a containerized API with MongoDB.
+
+### Frontend (Vercel)
+
+- Import the repository with **Root Directory** `frontend`; Vercel detects Vite (`npm run build`, output `dist`). `frontend/vercel.json` rewrites every route to `index.html`.
+- Set `VITE_API_URL` to the API origin, without `/api` (for example `https://api.example.com`). Leave it unset only if the frontend's own domain proxies `/api` and `/socket.io` to the API.
+- `VITE_DEMO_ACCOUNTS=false` hides the one-click demo accounts.
+
+### API (any container host)
+
+Run the image CI publishes, `ghcr.io/robert2101/teampulse-backend:latest`, or build `backend/Dockerfile` on a host such as Render, Railway or Fly.io.
+
+| Variable | Value |
+|---|---|
+| `NODE_ENV` | `production` (JSON logs; `Secure`, `SameSite=None` session cookie) |
+| `MONGO_URI` | A MongoDB replica set such as Atlas; transactions are used when available |
+| `JWT_SECRET` | A long random string; changing it signs everyone out |
+| `CLIENT_URL` | The frontend origin exactly, e.g. `https://teampulse.vercel.app`. CORS and Socket.IO accept only this origin |
+| `TRUST_PROXY` | Proxy hops in front of the API (`1` on most platforms), so rate limits see real client IPs |
+| `COOKIE_SAME_SITE` | Leave unset when the API is on another site. Set `lax` when the app and API share a site (e.g. `app.example.com` and `api.example.com`) |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Optional: caching and rate limits (both fail open without Redis) |
+| `CLOUDINARY_*`, `GEMINI_API_KEY` | Optional: file uploads and the AI assistant |
+
+- **Health check:** point the platform's health check and an uptime monitor at `GET /api/health`. It answers 200 when the API and database are up, 503 otherwise.
+- **HTTPS:** both sites need HTTPS in production, because the cross-site session cookie is `Secure`.
+- **Demo data:** `node seed.js` loads the demo workspace, but it **wipes the database `MONGO_URI` points at**. Run it only against a database reserved for the demo.
+
+### GitHub configuration
+
+| Secret | Used by |
+|---|---|
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | `redis-keepalive.yml`, which pings the free-tier Upstash database every 8 hours |
+| `BACKEND_DEPLOY_HOOK_URL` (optional) | `ci.yml` calls it after pushing a new image from `master`, to redeploy the API |
+
+To make CI a merge gate, mark the **CI** checks as required in the branch protection rule for `master` (Settings → Branches).
+
+---
+
+## Testing
+
+```bash
+cd backend && npm test          # API tests: Vitest + Supertest on an in-memory MongoDB replica set
+cd frontend && npm run test:e2e # Playwright smoke tests (needs a local MongoDB; see below)
+```
+
+- **API tests** need nothing installed: a MongoDB binary is downloaded on the first run. They seed two workspaces and cover:
+  - tenant isolation and the role matrix;
+  - allow-listed updates, session revocation, CSRF and rate-limit keys;
+  - socket room checks, file access, transactions and the AI tool (Gemini mocked).
+- **End-to-end tests** start the API and the Vite dev server, then seed a throwaway database before running. It is `mongodb://127.0.0.1:27017/teampulse_e2e` by default; override it with `E2E_MONGO_URI`. The setup refuses any database whose name doesn't contain `e2e` or `test`. Run `npx playwright install chromium` once.
+
+---
+
 ## Load Testing
 
 An 11-scenario k6 suite lives in [`tests/load/k6`](tests/load/k6) — see its [README](tests/load/k6/README.md) for the full methodology, custom `tp_*` metric catalogue, and result-export options.
@@ -653,24 +719,33 @@ Scenarios: smoke · baseline · normal load · read-heavy · **cache-read (Redis
 
 ```
 TeamPulse/
+├── docker-compose.yml             # MongoDB (replica set) + API + frontend
+├── .github/workflows/             # ci.yml (lint, build, tests, images), redis-keepalive.yml
 ├── backend/
-│   ├── server.js                  # Express app, CORS, routes, Mongo bootstrap
-│   ├── seed.js                    # Multi-tenant demo data seeder
+│   ├── app.js                     # Express app: CORS, CSRF, health check, routes
+│   ├── server.js                  # Env, Socket.IO, Mongo connection, listen
+│   ├── Dockerfile                 # Multi-stage production image
+│   ├── seed.js                    # Multi-tenant demo data seeder (wipes the database)
 │   ├── config/
 │   │   ├── redis.js               # Upstash client, cache helpers, rate limiter
 │   │   └── cloudinary.js          # Cloudinary SDK config
 │   ├── middleware/
-│   │   ├── auth.middleware.js     # protectRoute (JWT + Redis session), requirePermission
+│   │   ├── auth.middleware.js     # protectRoute (JWT + token version + Redis session), requirePermission
+│   │   ├── csrf.middleware.js     # CSRF tokens, JSON-only bodies
+│   │   ├── rateLimit.middleware.js # Per-IP / per-user sliding windows
 │   │   └── upload.middleware.js   # Multer memory storage, MIME/size limits
 │   ├── models/                    # User, Workspace, Role, Project, Task,
 │   │                              # Comment, FileAsset, Activity, ChatbotInteraction
 │   ├── controllers/               # auth, project, task, comment,
 │   │                              # file, activity, chatbot
 │   ├── routes/                    # One router per domain
+│   ├── services/                  # task updates (shared by REST and AI), cascade cleanup
 │   ├── socket/socket.js           # JWT handshake auth, rooms, typing relay
-│   ├── utils/                     # logger (Winston), activityLogger (+ cache funnel)
-│   └── logs/                      # Dev log output
+│   ├── utils/                     # projectAccess, session, transaction, logger, activityLogger
+│   └── tests/                     # Vitest + Supertest API tests
 ├── frontend/
+│   ├── Dockerfile / nginx.conf    # Static build served by nginx, proxying /api and /socket.io
+│   ├── e2e/                       # Playwright smoke tests
 │   ├── src/
 │   │   ├── App.jsx                # Router, auth gate, protected layout
 │   │   ├── store/useStore.js      # Zustand global store
@@ -684,8 +759,8 @@ TeamPulse/
 │   │       ├── TaskModal/         # Details panel, header, description,
 │   │       │                      # attachments, real-time chat
 │   │       ├── files/             # DropZone, Preview (lightbox, download)
-│   │       ├── ui/                # shadcn/Radix primitives
-│   │       └── GradientBlinds / ScrollStack   # Landing animations
+│   │       ├── DemoAccounts.jsx   # One-click demo sign-in
+│   │       └── ui/                # shadcn/Radix primitives
 │   └── vercel.json                # SPA rewrites
 └── tests/load/k6/                 # 11 load-test scenarios + helpers + thresholds
 ```
