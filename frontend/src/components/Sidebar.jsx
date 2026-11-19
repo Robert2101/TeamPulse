@@ -178,11 +178,11 @@ export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, on
                         </span>
                         <div className="pr-6">
                             <DialogTitle className="text-lg font-semibold leading-tight text-gray-900">
-                                {isDemo ? "Leave the demo?" : "Log out of TeamPulse?"}
+                                Log out of TeamPulse?
                             </DialogTitle>
                             <DialogDescription className="mt-2 text-sm leading-relaxed text-gray-600">
                                 {isDemo
-                                    ? "This private demo workspace is discarded when you leave. You can start a fresh one any time."
+                                    ? "You can sign back in to the demo any time from the sign-in page."
                                     : "This signs you out on every device. You'll need your email and password to get back in."}
                             </DialogDescription>
                         </div>
@@ -190,7 +190,7 @@ export const Sidebar = ({ isCollapsed = false, toggleSidebar, mobile = false, on
                     <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <button onClick={() => setShowLogoutModal(false)} className={btn.ghost}>Cancel</button>
                         <button onClick={() => { setShowLogoutModal(false); logout(); }} className={btn.danger} autoFocus>
-                            {isDemo ? "Leave demo" : "Log out"}
+                            Log out
                         </button>
                     </div>
                 </DialogContent>

@@ -19,7 +19,7 @@ export const useStore = create((set) => ({
     projectsLoaded: false,
     pulse: null, // { days: [...14 ISO dates], byProject: { [projectId]: number[] } }
     commandOpen: false,
-    // Bumped when the signed-in person changes without a reload (demo persona switch), to remount pages.
+    // Bumped on every sign-in, so pages remount and refetch when the person changes without a reload.
     sessionKey: 0,
 
     checkAuth: async () => {
@@ -34,19 +34,6 @@ export const useStore = create((set) => ({
 
     login: async (credentials) => {
         const res = await axios.post('/auth/login', credentials);
-        set({ ...signedOut, user: res.data.user });
-    },
-
-    // Creates a private demo workspace and signs in as the chosen persona (admin, manager, member, stakeholder).
-    startDemo: async (persona) => {
-        const res = await axios.post('/demo/start', { persona });
-        set({ ...signedOut, user: res.data.user });
-        return res.data.user;
-    },
-
-    // Signs in as another persona of the same demo workspace.
-    switchPersona: async (persona) => {
-        const res = await axios.post('/demo/switch', { persona });
         set((state) => ({ ...signedOut, user: res.data.user, sessionKey: state.sessionKey + 1 }));
         return res.data.user;
     },
