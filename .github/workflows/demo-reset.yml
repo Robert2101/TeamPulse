@@ -1,0 +1,62 @@
+name: Nightly demo reset
+
+# Visitors share the Fernway demo accounts, so the data drifts as they move, edit and delete things.
+# Every night this rebuilds the demo workspace from backend/demo/template.js, with every date
+# recalculated from now. Only the demo workspace is replaced; other workspaces are never touched,
+# and the demo accounts keep their ids, so anyone signed in stays signed in.
+#
+# Needs the repository secret MONGO_URI (the production database). The Upstash and Cloudinary
+# secrets are optional: they clear cached demo data and remove files visitors uploaded.
+on:
+  schedule:
+    - cron: "17 3 * * *" # 03:17 UTC every night, off the top of the hour to avoid GitHub's busiest minutes
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: write # lets the last step keep this schedule from being auto-disabled
+
+concurrency:
+  group: demo-reset
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --omit=dev
+
+      - name: Rebuild the demo workspace
+        working-directory: backend
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          CLIENT_URL: ${{ vars.CLIENT_URL || 'https://teampulseapp.vercel.app' }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+        run: |
+          if [ -z "$MONGO_URI" ]; then
+            echo "::error::Add the repository secret MONGO_URI (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          node seed.js --reset-demo
+
+      # GitHub disables scheduled workflows in public repos after 60 days without repository activity.
+      - name: Keep this schedule enabled
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/demo-reset.yml/enable"

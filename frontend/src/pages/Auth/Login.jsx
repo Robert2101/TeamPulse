@@ -6,7 +6,7 @@ import { AuthShell } from "./AuthShell";
 import { btn, field, label } from "../../lib/styles";
 import { errorMessage } from "../../lib/format";
 import { DemoPersonas } from "../../components/DemoPersonas";
-import { demoEnabled } from "../../lib/demo";
+import { DEMO_PASSWORD, demoEnabled } from "../../lib/demo";
 
 export const Login = () => {
     const [credentials, setCredentials] = useState({ emailAddress: "", password: "" });
@@ -105,8 +105,10 @@ export const Login = () => {
 
             {demoEnabled && (
                 <div className="mt-8 border-t border-gray-200 pt-6">
-                    <p className="text-sm font-medium text-gray-900">Or explore a demo workspace</p>
-                    <p className="mt-0.5 mb-3 text-xs text-gray-600">Your own private copy of a sample company, as any of its people. Resets after 24 hours.</p>
+                    <p className="text-sm font-medium text-gray-900">Or sign in to the demo</p>
+                    <p className="mt-0.5 mb-3 text-xs text-gray-600">
+                        Fernway, a sample company. Use the buttons, or any <span className="font-medium text-gray-800">@fernway.example</span> account with the password <span className="font-medium text-gray-800">{DEMO_PASSWORD}</span>. The data resets every night.
+                    </p>
                     <DemoPersonas compact />
                 </div>
             )}

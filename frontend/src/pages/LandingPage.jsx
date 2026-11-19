@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowRight, Check, Loader2, Minus } from "lucide-react";
 import { LogoMark } from "../components/ui/logo";
 import { DemoPersonas, DemoStatus } from "../components/DemoPersonas";
 import { ProductPreview } from "../components/landing/ProductPreview";
 import { AssistantFragment, AttentionFragment, AuditFragment, ThreadFragment } from "../components/landing/Fragments";
 import { Reveal } from "../components/landing/Reveal";
-import { useStartDemo } from "../hooks/useStartDemo";
+import { useDemoSignIn } from "../hooks/useDemoSignIn";
 import { demoEnabled, PREVIEW_ROLES } from "../lib/demo";
 import { btn } from "../lib/styles";
 import { cn } from "../lib/utils";
@@ -94,21 +94,19 @@ const STACK = [
     ["Real time", "Socket.IO with one room per project. Joining a room is authorized like any API call, and typing events never leave it."],
     ["Security", "Revocable httpOnly sessions, CSRF tokens, tenant-scoped queries and allow-listed updates."],
     ["AI", "Gemini 2.5 Flash with streamed answers and one tool, scoped in the database query to the caller's own tasks."],
-    ["The demo", "Each visitor gets a private copy of a sample company, built from a template in a few hundred milliseconds and deleted after 24 hours."],
+    ["The demo", "Real accounts in a sample company, built from one template with every date relative to now, and rebuilt every night by a GitHub Action."],
     ["Quality", "API tests on an in-memory MongoDB replica set, Playwright smoke tests and GitHub Actions CI with Docker images."],
 ];
 
 export const LandingPage = () => {
-    const { start, pending, slow, error: demoError } = useStartDemo();
-    const [params] = useSearchParams();
+    const { signInAs, pending, slow, error: demoError } = useDemoSignIn();
     const [role, setRole] = useState(PREVIEW_ROLES[0]);
-    const expired = params.get("demo") === "expired";
 
     // Wake the API while the visitor reads: free hosting sleeps when idle, and the demo button needs it.
     useEffect(() => { fetch(`${API_ORIGIN}/api/health`).catch(() => {}); }, []);
 
     const demoButton = (className, label = "Explore the demo") => (
-        <button type="button" onClick={() => start("admin")} disabled={pending !== null} className={cn(btn.primary, "shadow-none", className)}>
+        <button type="button" onClick={() => signInAs("admin")} disabled={pending !== null} className={cn(btn.primary, "shadow-none", className)}>
             {pending === "admin" && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
             {label}
         </button>
@@ -131,11 +129,6 @@ export const LandingPage = () => {
             <main>
                 {/* Hero: the claim, one way in, and the product itself */}
                 <section className="mx-auto max-w-7xl px-4 pb-24 pt-10 sm:px-8 sm:pt-16">
-                    {expired && (
-                        <p role="status" className="mb-8 max-w-2xl rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                            Your demo workspace reached its 24 hours and was cleared. Start a fresh one below.
-                        </p>
-                    )}
                     <div className="grid grid-cols-1 items-end gap-x-12 gap-y-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
                         <h1 className="text-4xl font-semibold tracking-[-0.035em] text-balance text-gray-900 sm:text-6xl lg:text-7xl">
                             A live board for the whole team.
@@ -150,8 +143,8 @@ export const LandingPage = () => {
                             </div>
                             {demoEnabled && (
                                 <p className="mt-3 text-sm text-gray-600">
-                                    A private copy of a sample company, yours for 24 hours. No account needed.{" "}
-                                    <a href="#demo" className={cn(TEXT_LINK, "whitespace-nowrap")}>Open it as someone else</a>
+                                    Signs you in to a sample company as its Admin. No sign-up needed.{" "}
+                                    <a href="#demo" className={cn(TEXT_LINK, "whitespace-nowrap")}>Sign in as someone else</a>
                                 </p>
                             )}
                             <DemoStatus slow={slow && pending === "admin"} error={demoError} />
@@ -276,9 +269,9 @@ export const LandingPage = () => {
                     <section id="demo" aria-labelledby="demo-title" className="scroll-mt-8 bg-white">
                         <div className="mx-auto max-w-7xl px-4 py-28 sm:px-8">
                             <div className="grid items-end gap-x-12 gap-y-5 lg:grid-cols-2">
-                                <Reveal as="h2" id="demo-title" className={H2}>Open the demo as anyone.</Reveal>
+                                <Reveal as="h2" id="demo-title" className={H2}>Sign in as anyone.</Reveal>
                                 <Reveal as="p" delay={80} className={LEAD}>
-                                    Fernway, a travel startup, is mid-launch: a crash due tomorrow, reviews waiting, a load test running late. You get your own copy for 24 hours and can switch person from the top bar.
+                                    Fernway, a travel startup, is mid-launch: a crash due tomorrow, reviews waiting, a load test running late. Every account signs in with the password password123, and the top bar switches between them. The data resets every night.
                                 </Reveal>
                             </div>
                             <Reveal delay={140} className="mt-12">

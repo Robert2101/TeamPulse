@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { card, openDemoAs, openProject, pick } from "./helpers.js";
 
-// Lucas is a team member on Mobile app 3.0. Every test gets its own sandbox, so changes never leak between tests.
+// Lucas is a team member on Mobile app 3.0. The seed runs once per test run, so each test works on different tasks.
 test.beforeEach(async ({ page }) => {
     await openDemoAs(page, "Lucas Moreau", "Team Member");
     await openProject(page, "Mobile app 3.0");

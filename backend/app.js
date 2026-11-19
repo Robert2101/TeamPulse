@@ -13,7 +13,6 @@ import commentRoutes from './routes/comment.route.js';
 import chatbotRoutes from './routes/chatbot.route.js';
 import activityRoutes from './routes/activity.route.js';
 import fileRoutes from './routes/file.route.js';
-import demoRoutes from './routes/demo.route.js';
 
 // The Express app, without a listening server or database connection, so tests can import it directly.
 const app = express();
@@ -59,7 +58,6 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/files', fileRoutes);
-app.use('/api/demo', demoRoutes);
 
 // Global multer error handler
 app.use((err, req, res, next) => {

@@ -23,16 +23,27 @@ test("a stakeholder reads the board and joins the discussion, but can't move wor
     await expect(page.getByRole("button", { name: /Add task|New task/ })).toHaveCount(0);
 });
 
-test("workspaces are isolated, even two copies of the same company", async ({ page }) => {
-    // A project in the seeded Fernway workspace...
+test("another company's admin can't open Fernway's projects", async ({ page }) => {
     await signIn(page, "maya");
     await openProject(page, "Mobile app 3.0");
-    const seededProject = new URL(page.url()).pathname;
+    const fernwayProject = new URL(page.url()).pathname;
     await signOut(page);
 
-    // ...is out of reach from a sandbox copy of Fernway, whose Admin has the same name and the same projects.
-    await openDemoAs(page, "Maya Chen", "Admin");
-    await page.goto(seededProject);
+    const email = `owner+${Date.now()}@northwind.example`;
+    await page.goto("/register");
+    await page.getByRole("tab", { name: "Create a workspace" }).click();
+    await page.getByLabel("Workspace or company name").fill("Northwind Studio");
+    await page.getByLabel("Full name").fill("Ines Duarte");
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill("password123");
+    await page.getByRole("button", { name: "Create workspace" }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill("password123");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    await page.goto(fernwayProject);
     await expect(page.getByRole("heading", { name: "Project not found" })).toBeVisible();
 });
 

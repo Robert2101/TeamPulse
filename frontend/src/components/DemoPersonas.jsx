@@ -2,7 +2,7 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { Avatar } from "./ui/avatar";
 import { cn } from "../lib/utils";
 import { DEMO_PERSONAS } from "../lib/demo";
-import { useStartDemo } from "../hooks/useStartDemo";
+import { useDemoSignIn } from "../hooks/useDemoSignIn";
 
 export const DemoStatus = ({ slow, error }) => (
     <>
@@ -15,9 +15,9 @@ export const DemoStatus = ({ slow, error }) => (
     </>
 );
 
-/** One button per demo persona; each opens a private copy of the demo company as that person. */
+/** One button per shared demo account; each signs in with that account's email and password. */
 export const DemoPersonas = ({ compact = false, className, listClassName }) => {
-    const { start, pending, slow, error } = useStartDemo();
+    const { signInAs, pending, slow, error } = useDemoSignIn();
 
     return (
         <div className={className}>
@@ -30,9 +30,9 @@ export const DemoPersonas = ({ compact = false, className, listClassName }) => {
                         <li key={p.persona}>
                             <button
                                 type="button"
-                                onClick={() => start(p.persona)}
+                                onClick={() => signInAs(p.persona)}
                                 disabled={pending !== null}
-                                aria-label={`Open the demo as ${p.name}, ${p.role}`}
+                                aria-label={`Sign in as ${p.name}, ${p.role}`}
                                 className={cn(
                                     "group h-full w-full text-left transition-[border-color,background-color,box-shadow,transform] duration-150 ease-snappy active:scale-[0.99] disabled:opacity-60",
                                     compact
@@ -57,6 +57,7 @@ export const DemoPersonas = ({ compact = false, className, listClassName }) => {
                                         </span>
                                         <span className="mt-4 block font-semibold text-gray-900">{p.name}</span>
                                         <span className="block text-sm text-gray-600">{p.role} · {p.title}</span>
+                                        <span className="mt-1 block truncate text-sm text-gray-500">{p.email}</span>
                                         <span className="mt-3 block text-sm leading-relaxed text-gray-700">{p.sees}</span>
                                     </>
                                 )}

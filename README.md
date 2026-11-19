@@ -6,7 +6,7 @@
 
 TeamPulse lets organizations run their entire delivery operation inside isolated workspaces: role-based teams collaborate on live Kanban boards, discuss tasks in real time, manage files on a Cloudinary pipeline, and get answers from an AI assistant that reads — and safely acts on — their actual project data. Every layer is hardened for tenancy isolation, dual-layer RBAC, and performance under load.
 
-**Live demo: [teampulseapp.vercel.app](https://teampulseapp.vercel.app)**. Click **Explore the demo** to open a private copy of **Fernway**, a sample travel startup mid-launch, in one click: no sign-up, yours for 24 hours. Open it as the Admin, a Project Manager, a Team Member or a Stakeholder, and switch person from the top bar at any time. The API runs at [`teampulse-backend-338f.onrender.com`](https://teampulse-backend-338f.onrender.com/api/health) (health check: `/api/health`).
+**Live demo: [teampulseapp.vercel.app](https://teampulseapp.vercel.app)**. Click **Explore the demo** to sign in to **Fernway**, a sample travel startup mid-launch, as its Admin. Demo accounts exist for every role (Admin, Project Manager, Team Member, Stakeholder) and sign in with the password `password123`; the top bar switches between them, and the data resets every night. The API runs at [`teampulse-backend-338f.onrender.com`](https://teampulse-backend-338f.onrender.com/api/health) (health check: `/api/health`).
 
 To run it yourself, use [Docker](#run-with-docker) or [npm](#running-the-application).
 
@@ -42,10 +42,11 @@ To run it yourself, use [Docker](#run-with-docker) or [npm](#running-the-applica
 - Cryptographically random 8-character invite codes (no look-alike characters), shown to Admins in Settings with one-click copy and a "Generate a new code" action that retires the old one.
 - Every document — project, task, comment, file, activity — carries a `workspace` reference, and every lookup puts the workspace in the query filter itself. A resource in another workspace answers `404`, exactly like one that doesn't exist, so no response reveals which ids exist elsewhere.
 
-### 🎭 Private Demo Sandboxes
-- `POST /api/demo/start` builds a fresh copy of the Fernway workspace for each visitor from a template (9 people, 5 projects, 22 tasks with threads, files, history and assistant chats), with every date relative to now. It takes a few hundred milliseconds and runs in one transaction.
-- Four personas, one per role. The top bar switches between them inside the same sandbox, so a visitor can see the same work as an Admin, a manager, a member and a partner.
-- Sandboxes expire after 24 hours and are purged on startup, every 30 minutes and on logout, including any files visitors uploaded to Cloudinary.
+### 🎭 Demo Accounts That Reset Every Night
+- Fernway is built from one template (`backend/demo/template.js`): 9 people, 5 projects, 22 tasks with threads, files, history and assistant chats, every date relative to the moment it's built.
+- Real accounts for every role (`maya@`, `daniel@`, `lucas@`, `grace@fernway.example`, …, password `password123`). The landing and sign-in pages sign in with one click; the top bar switches account.
+- Visitors share the accounts, so they see each other's changes live. They can't change anything that would lock the next visitor out: profile, roles, account status and the invite code are read-only for demo accounts, projects can't be deleted, and logging out ends only that browser's session.
+- A GitHub Action rebuilds the demo workspace every night (`node seed.js --reset-demo`). Only the demo workspace is replaced, in one transaction; accounts keep their ids, so nobody is signed out.
 
 ### 🔐 Four-Tier Role-Based Access Control
 - Roles: **Admin**, **Project Manager**, **Team Member**, **Stakeholder**, each mapped to granular permission flags (`manageProjects`, `manageTasks`, `manageTeamMembers`, `viewReports`).
@@ -243,8 +244,7 @@ erDiagram
         string workspaceName
         ObjectId owner FK
         string inviteCode UK
-        boolean isDemo
-        date expiresAt "demo sandboxes only"
+        boolean isDemo "the shared demo workspace"
     }
 
     ROLE {
@@ -271,7 +271,6 @@ erDiagram
         boolean isVerified
         date lastLogin
         string jobTitle
-        string demoPersona "admin|manager|member|stakeholder"
     }
 
     PROJECT {
@@ -400,7 +399,7 @@ All events are scoped to project rooms.
 
 ## API Reference
 
-All endpoints require the JWT cookie except `signup`, `login`, `logout` and `demo/start`. Base path: `/api`.
+All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Base path: `/api`.
 
 ### Authentication — `/auth`
 
@@ -462,13 +461,6 @@ All endpoints require the JWT cookie except `signup`, `login`, `logout` and `dem
 |---|---|---|
 | GET | `/:entityId` | Audit trail for a project (resolves its tasks/comments). Latest 100, 30 s cache. Admins, and Project Managers with access to the project |
 
-### Demo — `/demo`
-
-| Method | Path | Notes |
-|---|---|---|
-| POST | `/start` | Body: `persona` (`admin`\|`manager`\|`member`\|`stakeholder`). Builds a private sandbox and signs in as that person. 12 req / hr / IP |
-| POST | `/switch` | Signs in as another persona of the caller's own sandbox |
-
 ### AI Assistant — `/chatbot`
 
 | Method | Path | Notes |
@@ -503,7 +495,6 @@ Writes follow a strict order: **persist to MongoDB first, invalidate Redis secon
 | Chatbot `/ask` | 20 / 1 h | User ID |
 | File uploads | 30 / 15 min | User ID |
 | File reads/deletes | 100 / 15 min | User ID |
-| Demo starts | 12 / 1 h | Client IP |
 
 Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` hops (default 1 in production), so users behind the host's proxy get separate buckets and a client can't dodge limits by sending its own `X-Forwarded-For`.
 
@@ -610,7 +601,7 @@ node seed.js
 
 > ⚠️ **The seed script wipes all collections** before inserting demo data. Never run it against a database you care about.
 
-`node seed.js` creates the roles and a persistent copy of the Fernway workspace, built from the same template as the demo sandboxes (`backend/demo/template.js`). Every account's password is `password123`:
+`node seed.js` wipes the database, then creates the roles and the Fernway demo workspace (`backend/demo/template.js`). Every account's password is `password123`:
 
 | Account | Role | Works on |
 |---|---|---|
@@ -619,7 +610,13 @@ node seed.js
 | `lucas@fernway.example`, `aisha@fernway.example`, `sam@fernway.example`, `jonas@fernway.example`, `elena@fernway.example` | Team Member | Their projects' tasks |
 | `grace@fernway.example` | Stakeholder | A partner following the Partner API |
 
-The invite code is generated; an Admin finds it in Settings. `node seed.js --empty` creates the roles only, for a production database that should start clean. The one-click buttons on the landing and sign-in pages don't use these accounts: each opens a private sandbox.
+The invite code is generated; an Admin finds it in Settings. The one-click buttons on the landing and sign-in pages sign in to these accounts.
+
+| Command | Does |
+|---|---|
+| `node seed.js` | Wipes the whole database, then roles + the demo workspace. Local and tests only |
+| `node seed.js --empty` | Wipes the whole database, then roles only |
+| `node seed.js --reset-demo` | Replaces only the demo workspace; other workspaces are untouched. Safe on production, and what the nightly reset runs |
 
 ---
 
@@ -705,7 +702,7 @@ Run the image CI publishes, `ghcr.io/robert2101/teampulse-backend:latest`, or bu
 
 - **Health check:** point the platform's health check and an uptime monitor at `GET /api/health`. It answers 200 when the API and database are up, 503 otherwise.
 - **HTTPS:** required in production, because the session cookie is `Secure`.
-- **Demo data:** `node seed.js` loads the demo workspace, but it **wipes the database `MONGO_URI` points at**. Run it only against a database reserved for the demo.
+- **Demo data:** run `node seed.js --reset-demo` once against the production database to create the demo workspace; the nightly GitHub Action keeps it fresh. Never run plain `node seed.js` there: it **wipes the database `MONGO_URI` points at**.
 
 ### GitHub configuration
 
@@ -713,6 +710,7 @@ Run the image CI publishes, `ghcr.io/robert2101/teampulse-backend:latest`, or bu
 |---|---|
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | `redis-keepalive.yml`, which pings the free-tier Upstash database every 8 hours |
 | `BACKEND_DEPLOY_HOOK_URL` (optional) | `ci.yml` calls it after pushing a new image from `master`, to redeploy the API |
+| `MONGO_URI` | `demo-reset.yml`, which rebuilds the demo workspace every night at 03:17 UTC (it also uses the Upstash and `CLOUDINARY_*` secrets when present, to clear cached demo data and visitors' uploads) |
 
 To make CI a merge gate, mark the **CI** checks as required in the branch protection rule for `master` (Settings → Branches).
 
@@ -729,7 +727,7 @@ cd frontend && npm run test:e2e # Playwright smoke tests (needs a local MongoDB;
   - tenant isolation and the role matrix;
   - allow-listed updates, session revocation, CSRF and rate-limit keys;
   - socket room checks, file access, transactions and the AI tool (Gemini mocked).
-- **End-to-end tests** start the API and the Vite dev server, then seed a throwaway database before running. Tests that change data each open their own demo sandbox, so they can't affect one another. It is `mongodb://127.0.0.1:27017/teampulse_e2e` by default; override it with `E2E_MONGO_URI`. The setup refuses any database whose name doesn't contain `e2e` or `test`. Run `npx playwright install chromium` once.
+- **End-to-end tests** start the API and the Vite dev server, then seed a throwaway database before running. Tests sign in to the seeded demo accounts, and tests that change data each work on different tasks. It is `mongodb://127.0.0.1:27017/teampulse_e2e` by default; override it with `E2E_MONGO_URI`. The setup refuses any database whose name doesn't contain `e2e` or `test`. Run `npx playwright install chromium` once.
 
 ---
 
@@ -760,12 +758,12 @@ Scenarios: smoke · baseline · normal load · read-heavy · **cache-read (Redis
 ```
 TeamPulse/
 ├── docker-compose.yml             # MongoDB (replica set) + API + frontend
-├── .github/workflows/             # ci.yml (lint, build, tests, images), redis-keepalive.yml
+├── .github/workflows/             # ci.yml (lint, build, tests, images), redis-keepalive.yml, demo-reset.yml (nightly)
 ├── backend/
 │   ├── app.js                     # Express app: CORS, CSRF, health check, routes
 │   ├── server.js                  # Env, Socket.IO, Mongo connection, listen
 │   ├── Dockerfile                 # Multi-stage production image
-│   ├── seed.js                    # Roles + the Fernway workspace (wipes the database); --empty for roles only
+│   ├── seed.js                    # Roles + the Fernway demo; --reset-demo replaces only the demo (nightly)
 │   ├── demo/template.js           # The Fernway company: people, projects, tasks, threads, files, chats
 │   ├── config/
 │   │   ├── redis.js               # Upstash client, cache helpers, rate limiter
@@ -780,7 +778,7 @@ TeamPulse/
 │   ├── controllers/               # auth, project, task, comment,
 │   │                              # file, activity, chatbot
 │   ├── routes/                    # One router per domain
-│   ├── services/                  # task updates (shared by REST and AI), cascade cleanup, demo sandboxes
+│   ├── services/                  # task updates (shared by REST and AI), cascade cleanup, the demo workspace build/reset
 │   ├── socket/socket.js           # JWT handshake auth, rooms, typing relay
 │   ├── utils/                     # projectAccess, session, transaction, logger, activityLogger
 │   └── tests/                     # Vitest + Supertest API tests
@@ -801,7 +799,7 @@ TeamPulse/
 │   │       │                      # attachments, real-time chat
 │   │       ├── files/             # DropZone, Preview (lightbox, download)
 │   │       ├── landing/           # Product preview with the role switch, screen fragments, reveal
-│       ├── DemoPersonas.jsx / DemoSwitcher.jsx  # Open a sandbox as a persona; switch persona
+│       ├── DemoPersonas.jsx / DemoSwitcher.jsx  # One-click demo sign-in; switch demo account
 │       ├── CommandPalette.jsx # ⌘K: jump to a project or task
 │   │       └── ui/                # shadcn/Radix primitives
 │   └── vercel.json                # SPA rewrites

@@ -9,7 +9,7 @@ import { delCache } from '../config/redis.js';
 import { authCookieOptions, issueSession, revokeSessions, toClientUser } from '../utils/session.js';
 import { csrfTokenFor } from '../middleware/csrf.middleware.js';
 import { withTransaction } from '../utils/transaction.js';
-import { purgeSandbox } from '../services/demo.service.js';
+import { demoLocked, isDemoUser } from '../utils/demo.js';
 
 export const signup = async (req, res) => {
     try {
@@ -47,9 +47,6 @@ export const signup = async (req, res) => {
 
             const workspace = await Workspace.findOne({ inviteCode: String(inviteCode).trim().toUpperCase() });
             if (!workspace) return res.status(404).json({ message: "Invalid invite code" });
-            if (workspace.isDemo) {
-                return res.status(400).json({ message: "That code belongs to a demo workspace. Create your own workspace instead." });
-            }
 
             // ENFORCING PRINCIPLE OF LEAST PRIVILEGE
             // Everyone who joins via a generic invite code is assigned the absolutely lowest default role: Stakeholder (Read-only Viewer).
@@ -118,10 +115,10 @@ export const logout = async (req, res) => {
         try {
             // verify, not decode: a forged cookie must not be able to log someone else out
             const { userId } = jwt.verify(token, process.env.JWT_SECRET);
-            await revokeSessions(userId);
-            // Leaving a demo discards its private workspace instead of keeping it until it expires.
+            // Shared demo accounts only lose this browser's cookie: revoking would sign out every
+            // other visitor using the same account.
             const user = await User.findById(userId).select('workspace').populate('workspace', 'isDemo');
-            if (user?.workspace?.isDemo) await purgeSandbox(user.workspace._id);
+            if (!isDemoUser(user)) await revokeSessions(userId);
         } catch (error) {
             logger.info(`Logout without a valid session: ${error.message}`);
         }
@@ -159,6 +156,7 @@ export const getWorkspaceUsers = async (req, res) => {
 export const updateUserRole = async (req, res) => {
     try {
         // Security check: Only Admin can change roles!
+        if (isDemoUser(req.dbUser)) return demoLocked(res, 'Changing roles');
         if (req.dbUser.role.roleName !== 'Admin') {
             return res.status(403).json({ message: "Only Admins can change user roles" });
         }
@@ -198,6 +196,7 @@ export const updateUserRole = async (req, res) => {
 
 export const updateUserStatus = async (req, res) => {
     try {
+        if (isDemoUser(req.dbUser)) return demoLocked(res, 'Deactivating people');
         if (req.dbUser.role.roleName !== 'Admin') {
             return res.status(403).json({ message: "Only Admins can change user status" });
         }
@@ -238,6 +237,7 @@ export const updateUserStatus = async (req, res) => {
 export const updateProfile = async (req, res) => {
     try {
         const { fullName, emailAddress, phoneNumber, password } = req.body;
+        if (isDemoUser(req.dbUser)) return demoLocked(res, 'Editing the profile');
         const user = await User.findById(req.dbUser._id);
         if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -273,6 +273,7 @@ export const updateProfile = async (req, res) => {
 // Admins can rotate the invite code, e.g. after it leaked; the old code stops working immediately.
 export const regenerateInviteCode = async (req, res) => {
     try {
+        if (isDemoUser(req.dbUser)) return demoLocked(res, 'Changing the invite code');
         if (req.dbUser.role.roleName !== 'Admin') {
             return res.status(403).json({ message: "Only Admins can change the invite code" });
         }
