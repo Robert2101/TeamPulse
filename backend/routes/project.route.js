@@ -4,7 +4,8 @@ import {
     getAllProjects,
     updateProject,
     getProjectById,
-    deleteProject
+    deleteProject,
+    getProjectPulse
 } from '../controllers/project.controller.js';
 import { protectRoute, requirePermission } from '../middleware/auth.middleware.js';
 
@@ -13,6 +14,7 @@ const router = express.Router();
 router.use(protectRoute);
 
 router.get('/', getAllProjects);
+router.get('/pulse', getProjectPulse);
 router.get('/:id', getProjectById);
 
 router.post('/', requirePermission('manageProjects'), createProject);

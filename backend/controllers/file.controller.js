@@ -8,6 +8,7 @@ import logger from '../utils/logger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getIO } from '../socket/socket.js';
 import { canAccessProject } from '../utils/projectAccess.js';
+import { isDemoAsset } from '../utils/demoAssets.js';
 
 const PROJECT_SCOPED = ['Task', 'Comment', 'Project'];
 
@@ -128,22 +129,17 @@ export const getFilesByEntity = async (req, res) => {
 export const deleteFile = async (req, res) => {
     try {
         const { fileId } = req.params;
-        const file = await FileAsset.findById(fileId);
-
+        // Tenant-scoped lookup: a file in another workspace answers exactly like one that doesn't exist.
+        const file = await FileAsset.findOne({ _id: fileId, workspace: req.dbUser.workspace });
         if (!file) return res.status(404).json({ message: "File not found." });
-
-        const userWs = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
-        const fileWs = file.workspace?._id?.toString() || file.workspace?.toString();
-
-        if (userWs !== fileWs) {
-            return res.status(403).json({ message: "Access Denied. File belongs to another workspace." });
-        }
 
         if (file.uploadedBy.toString() !== req.dbUser._id.toString() && req.dbUser.role.roleName !== 'Admin') {
             return res.status(403).json({ message: "You are not authorised to delete this file." });
         }
 
-        await cloudinary.uploader.destroy(file.cloudinaryId, { resource_type: file.cloudinaryResourceType || 'raw' });
+        if (!isDemoAsset(file)) {
+            await cloudinary.uploader.destroy(file.cloudinaryId, { resource_type: file.cloudinaryResourceType || 'raw' });
+        }
 
         let projectIdToBroadcast = null;
 

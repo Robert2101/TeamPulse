@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
-import { ArrowLeft, Calendar, Lock, RotateCw, Search, MessageSquare, Paperclip } from "lucide-react";
+import { ArrowLeft, Calendar, Lock, RotateCw, Search, MessageSquare, Paperclip, UserRound } from "lucide-react";
 
 import api from "../lib/axios";
 import { useSocket } from "../hooks/useSocket";
@@ -9,8 +9,12 @@ import { ManageTeamModal } from "../components/ManageTeamModal";
 import { EditProjectModal } from "../components/EditProjectModal";
 import { useStore } from "../store/useStore";
 import { Avatar } from "../components/ui/avatar";
-import { PriorityBadge, ProjectStatusBadge } from "../components/ui/badges";
-import { TASK_STATUS_DOT } from "../lib/taskMeta";
+import { ProjectStatusBadge } from "../components/ui/badges";
+import { PriorityIcon } from "../components/ui/priority-icon";
+import { Pulse } from "../components/ui/pulse";
+import { Kbd } from "../components/ui/kbd";
+import { useHotkeys } from "../hooks/useHotkeys";
+import { TASK_STATUS_DOT, taskKey } from "../lib/taskMeta";
 import { formatDate, isOverdue, errorMessage } from "../lib/format";
 import { toast } from "../lib/toast";
 import { btn, field } from "../lib/styles";
@@ -63,6 +67,12 @@ export const ProjectBoard = () => {
     const [dragOverColumn, setDragOverColumn] = useState(null);
     const [query, setQuery] = useState("");
     const [onlyMine, setOnlyMine] = useState(false);
+    const [createOpen, setCreateOpen] = useState(false);
+    const filterRef = useRef(null);
+    // Real-time connection state, and a counter that replays the Live dot's beat on every update.
+    const [connected, setConnected] = useState(false);
+    const [beat, setBeat] = useState(0);
+    const pulse = useStore((s) => s.pulse);
 
     // FLIP: snapshot card positions right before tasks change, then animate from there after React re-renders.
     const boardRef = useRef(null);
@@ -156,8 +166,17 @@ export const ProjectBoard = () => {
             "new-comment": onComment, "comment-deleted": onCommentDeleted,
             "file-uploaded": onFile, "file-deleted": onFileDeleted,
         };
-        Object.entries(handlers).forEach(([event, handler]) => socket.on(event, handler));
-        return () => Object.entries(handlers).forEach(([event, handler]) => socket.off(event, handler));
+        const withBeat = Object.fromEntries(Object.entries(handlers).map(([event, handler]) => [event, (...args) => { setBeat((b) => b + 1); handler(...args); }]));
+        const onConnect = () => setConnected(true);
+        const onDisconnect = () => setConnected(false);
+        socket.on("connect", onConnect);
+        socket.on("disconnect", onDisconnect);
+        Object.entries(withBeat).forEach(([event, handler]) => socket.on(event, handler));
+        return () => {
+            socket.off("connect", onConnect);
+            socket.off("disconnect", onDisconnect);
+            Object.entries(withBeat).forEach(([event, handler]) => socket.off(event, handler));
+        };
     }, [socket, mergeTask, captureLayout, setTaskParam]);
 
     // A link to a task that is gone (deleted, or never on this board) closes with an explanation.
@@ -176,6 +195,12 @@ export const ProjectBoard = () => {
     const canCreateTask = isAdmin || isProjectManager || (user?.role?.manageTasks && isMember);
     // PATCH /tasks requires the manageTasks permission plus project membership.
     const canMoveTasks = isAdmin || isProjectManager || (!!user?.role?.manageTasks && isMember);
+
+    // Board shortcuts, off while the task panel or the create dialog is open: / filters, C creates a task.
+    useHotkeys({
+        "/": () => filterRef.current?.focus(),
+        c: () => { if (canCreateTask && activeTab === "kanban") setCreateOpen(true); },
+    }, !selectedTaskId && !createOpen);
 
     const changeStatus = useCallback(async (taskId, newStatus) => {
         let previous;
@@ -264,12 +289,26 @@ export const ProjectBoard = () => {
                         <ArrowLeft size={16} aria-hidden="true" /> All projects
                     </Link>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        {project.key && <span className="rounded-md bg-gray-900 px-1.5 py-0.5 tabular text-xs font-medium text-white">{project.key}</span>}
                         <h1 className="line-clamp-3 min-w-0 text-2xl font-semibold tracking-tight text-gray-900 wrap-anywhere sm:text-3xl">{project.projectName}</h1>
                         <ProjectStatusBadge status={project.projectStatus} />
                     </div>
                     {project.projectDescription && (
                         <p className="mt-2 line-clamp-3 max-w-3xl text-gray-600 wrap-anywhere">{project.projectDescription}</p>
                     )}
+                    <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-600">
+                        <span className="flex items-center gap-2" title="Updates per day over the last 14 days">
+                            <Pulse values={pulse?.byProject?.[project._id]} width={96} height={22} active />
+                            <span className="tabular">{(pulse?.byProject?.[project._id] || []).reduce((a, b) => a + b, 0)} updates in 14 days</span>
+                        </span>
+                        <span className="flex items-center gap-1.5" role="status" title={connected ? "Changes from your team appear here as they happen" : "Connecting to live updates"}>
+                            <span className="relative flex size-2">
+                                {connected && beat > 0 && <span key={beat} className="absolute inline-flex size-full animate-beat rounded-full bg-emerald-500" />}
+                                <span className={cn("relative inline-flex size-2 rounded-full", connected ? "bg-emerald-500" : "bg-gray-300")} />
+                            </span>
+                            {connected ? "Live" : "Connecting…"}
+                        </span>
+                    </div>
                 </div>
 
                 {/* --- CONDITIONAL RENDERING CONTROL PANEL --- */}
@@ -286,6 +325,8 @@ export const ProjectBoard = () => {
                         <CreateTaskModal
                             api={api}
                             project={project}
+                            open={createOpen}
+                            onOpenChange={setCreateOpen}
                             onTaskCreated={(newTask) => { captureLayout(); setTasks(prev => (prev.some(t => t._id === newTask._id) ? prev : [newTask, ...prev])); }}
                         />
                     )}
@@ -322,13 +363,15 @@ export const ProjectBoard = () => {
                         <span className="sr-only">Filter tasks</span>
                         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                         <input
+                            ref={filterRef}
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
                             placeholder="Filter by title or description"
-                            className={cn(field, "h-9 pl-9")}
+                            className={cn(field, "h-9 pl-9 pr-9")}
                         />
+                        {!query && <Kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">/</Kbd>}
                     </label>
                     <div role="group" aria-label="Whose tasks to show" className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                         {[["Everyone", false], ["Mine", true]].map(([text, mine]) => (
@@ -413,9 +456,14 @@ export const ProjectBoard = () => {
                                                         canMoveTasks ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                                                     )}
                                                 >
-                                                    <div className="mb-2 flex items-center justify-between gap-2">
-                                                        <PriorityBadge priority={task.priority} />
-                                                        {assignee && <Avatar name={assignee.fullName} src={assignee.profilePicture} size="xs" />}
+                                                    <div className="mb-2 flex items-center gap-2">
+                                                        <PriorityIcon priority={task.priority} />
+                                                        {taskKey(task, project) && <span className="tabular text-[11px] font-medium text-gray-500">{taskKey(task, project)}</span>}
+                                                        <span className="ml-auto">
+                                                            {assignee
+                                                                ? <Avatar name={assignee.fullName} src={assignee.profilePicture} size="xs" />
+                                                                : <span className="flex size-6 items-center justify-center rounded-full border border-dashed border-gray-300 text-gray-400" title="Unassigned"><UserRound size={12} aria-label="Unassigned" /></span>}
+                                                        </span>
                                                     </div>
                                                     <h3 className="line-clamp-3 text-sm font-medium leading-snug text-gray-900 wrap-anywhere">{task.taskName}</h3>
                                                     {(task.dueDate || commentCount > 0 || fileCount > 0) && (

@@ -5,7 +5,8 @@ import {
     updateTask,
     deleteTask,
     getMyTasks,
-    getDashboardStats
+    getDashboardStats,
+    getOverviewTasks
 } from '../controllers/task.controller.js';
 import { protectRoute, requirePermission } from '../middleware/auth.middleware.js';
 
@@ -17,6 +18,7 @@ router.post('/', requirePermission('manageTasks'), createTask);
 router.get('/stats', getDashboardStats);
 router.get('/project/:projectId', getTasksByProject);
 router.get('/mine', getMyTasks);
+router.get('/overview', getOverviewTasks);
 router.patch('/:id', requirePermission('manageTasks'), updateTask);
 router.delete('/:id', requirePermission('manageTasks'), deleteTask);
 

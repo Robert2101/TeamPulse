@@ -6,7 +6,7 @@
 
 TeamPulse lets organizations run their entire delivery operation inside isolated workspaces: role-based teams collaborate on live Kanban boards, discuss tasks in real time, manage files on a Cloudinary pipeline, and get answers from an AI assistant that reads — and safely acts on — their actual project data. Every layer is hardened for tenancy isolation, dual-layer RBAC, and performance under load.
 
-**Live demo: [teampulseapp.vercel.app](https://teampulseapp.vercel.app)**. Click **Explore the demo** to sign into a seeded sample workspace in one click. A role picker also opens it as a Project Manager, a Team Member, or the Admin of a second company. The API runs at [`teampulse-backend-338f.onrender.com`](https://teampulse-backend-338f.onrender.com/api/health) (health check: `/api/health`).
+**Live demo: [teampulseapp.vercel.app](https://teampulseapp.vercel.app)**. Click **Explore the demo** to open a private copy of **Fernway**, a sample travel startup mid-launch, in one click: no sign-up, yours for 24 hours. Open it as the Admin, a Project Manager, a Team Member or a Stakeholder, and switch person from the top bar at any time. The API runs at [`teampulse-backend-338f.onrender.com`](https://teampulse-backend-338f.onrender.com/api/health) (health check: `/api/health`).
 
 To run it yourself, use [Docker](#run-with-docker) or [npm](#running-the-application).
 
@@ -40,7 +40,12 @@ To run it yourself, use [Docker](#run-with-docker) or [npm](#running-the-applica
 ### 🏢 Multi-Tenant Workspaces
 - Two signup paths: **create a workspace** (creator becomes Admin) or **join via invite code** (joins land on the least-privileged Stakeholder role).
 - Cryptographically random 8-character invite codes (no look-alike characters), shown to Admins in Settings with one-click copy and a "Generate a new code" action that retires the old one.
-- Every document — project, task, comment, file, activity — carries a `workspace` reference, and queries are tenant-scoped at the controller layer.
+- Every document — project, task, comment, file, activity — carries a `workspace` reference, and every lookup puts the workspace in the query filter itself. A resource in another workspace answers `404`, exactly like one that doesn't exist, so no response reveals which ids exist elsewhere.
+
+### 🎭 Private Demo Sandboxes
+- `POST /api/demo/start` builds a fresh copy of the Fernway workspace for each visitor from a template (9 people, 5 projects, 22 tasks with threads, files, history and assistant chats), with every date relative to now. It takes a few hundred milliseconds and runs in one transaction.
+- Four personas, one per role. The top bar switches between them inside the same sandbox, so a visitor can see the same work as an Admin, a manager, a member and a partner.
+- Sandboxes expire after 24 hours and are purged on startup, every 30 minutes and on logout, including any files visitors uploaded to Cloudinary.
 
 ### 🔐 Four-Tier Role-Based Access Control
 - Roles: **Admin**, **Project Manager**, **Team Member**, **Stakeholder**, each mapped to granular permission flags (`manageProjects`, `manageTasks`, `manageTeamMembers`, `viewReports`).
@@ -70,9 +75,9 @@ To run it yourself, use [Docker](#run-with-docker) or [npm](#running-the-applica
 - Accurate deletion via stored `public_id` + resource type, mirrored back to parent documents.
 
 ### 📊 Dashboards, Audit & Administration
-- Admin command center: workspace-wide task KPIs (cached aggregate endpoint) and project directory.
-- Personal desk: individual pending/completed/urgent queues.
-- Audit Log timeline with entity-type filters, relative timestamps, and admin-only raw-ID inspection on hover.
+- Overview that leads with what needs attention, per role: overdue work, reviews waiting and unowned high-priority tasks for managers; your own focus for members; recent movement for stakeholders.
+- Task keys per project (`APP-12`), a 14-day activity pulse per project, and a ⌘K command palette for jumping to any project or task.
+- My Tasks grouped by when work is due; the Audit Log grouped by day, with entity-type filters and admin-only raw IDs on hover.
 - Settings: profile editing, avatar upload, invite-code sharing, and admin-only user role/activation management.
 
 ### 🚀 Performance Engineering
@@ -120,7 +125,7 @@ Gemini 2.5 Flash  (SSE streaming + function calling)
 
 ### WebSocket Room Model
 
-Each project owns a room keyed by its Mongo `_id`. Clients join via `useSocket(projectId)` on mount and leave on unmount; the hook tears down stale sockets when switching projects rapidly. Room joins are authorized server-side: the socket's user must belong to the project's workspace *and* be its manager or a member (or Admin). Cross-workspace join attempts are logged and rejected.
+Each project owns a room keyed by its Mongo `_id`. Clients join via `useSocket(projectId)` on mount and leave on unmount; the hook tears down stale sockets when switching projects rapidly. Room joins are authorized server-side: the socket's user must belong to the project's workspace *and* be its manager or a member (or Admin). A room in another workspace is refused exactly like a room that doesn't exist, and the attempt is logged.
 
 ### Cloudinary Upload Pipeline
 
@@ -201,7 +206,7 @@ Each project owns a room keyed by its Mongo `_id`. Clients join via `useSocket(p
 - `updateTask`: any project member may move status; only Admin/PM may change name, description, assignee, due date, priority, or parent project (other fields are stripped from the payload).
 - `deleteTask` / `deleteComment`: manager/Admin and author/Admin respectively.
 - File operations resolve the target's parent project and verify membership before serving or deleting.
-- Cross-workspace access on any resource returns `403` and is logged as a security alert.
+- A resource in another workspace returns `404`, the same answer as an id that doesn't exist (covered by a test that compares the two responses).
 
 ### Anti-Mass-Assignment Protection (S-04)
 
@@ -238,6 +243,8 @@ erDiagram
         string workspaceName
         ObjectId owner FK
         string inviteCode UK
+        boolean isDemo
+        date expiresAt "demo sandboxes only"
     }
 
     ROLE {
@@ -263,11 +270,15 @@ erDiagram
         date joiningDate
         boolean isVerified
         date lastLogin
+        string jobTitle
+        string demoPersona "admin|manager|member|stakeholder"
     }
 
     PROJECT {
         ObjectId _id PK
         string projectName
+        string key "APP, unique per workspace"
+        number taskCounter "next task number"
         ObjectId workspace FK
         ObjectId projectManager FK
         ObjectId createdBy FK
@@ -285,6 +296,7 @@ erDiagram
     TASK {
         ObjectId _id PK
         ObjectId workspace FK
+        number number "APP-12 is number 12"
         string taskName "max 200"
         string taskDescription
         ObjectId projectReference FK
@@ -388,7 +400,7 @@ All events are scoped to project rooms.
 
 ## API Reference
 
-All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Base path: `/api`.
+All endpoints require the JWT cookie except `signup`, `login`, `logout` and `demo/start`. Base path: `/api`.
 
 ### Authentication — `/auth`
 
@@ -409,6 +421,7 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 | Method | Path | Permission |
 |---|---|---|
 | GET | `/` | Authenticated — own/member projects, or all for Admin. Budget hidden for non-managers |
+| GET | `/pulse` | Daily activity counts for the last 14 days, per project the caller can see |
 | GET | `/:id` | Authenticated + workspace member. 90 s Redis cache |
 | POST | `/` | `manageProjects` |
 | PUT | `/:id` | `manageProjects` + owner (Admin may reassign PM) |
@@ -422,6 +435,7 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 | GET | `/project/:projectId` | Membership required. 30 s Redis cache |
 | GET | `/stats` | Workspace-wide status counts (cached 45 s) |
 | GET | `/mine` | Tasks assigned to caller |
+| GET | `/overview` | Open tasks across the projects the caller can see, for the Overview screen |
 | PATCH | `/:id` | `manageTasks` + membership. Non-managers limited to status changes |
 | DELETE | `/:id` | Manager/Admin only. Cascades comments |
 
@@ -447,6 +461,13 @@ All endpoints require the JWT cookie except `signup`, `login`, and `logout`. Bas
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/:entityId` | Audit trail for a project (resolves its tasks/comments). Latest 100, 30 s cache. Admins, and Project Managers with access to the project |
+
+### Demo — `/demo`
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/start` | Body: `persona` (`admin`\|`manager`\|`member`\|`stakeholder`). Builds a private sandbox and signs in as that person. 12 req / hr / IP |
+| POST | `/switch` | Signs in as another persona of the caller's own sandbox |
 
 ### AI Assistant — `/chatbot`
 
@@ -482,6 +503,7 @@ Writes follow a strict order: **persist to MongoDB first, invalidate Redis secon
 | Chatbot `/ask` | 20 / 1 h | User ID |
 | File uploads | 30 / 15 min | User ID |
 | File reads/deletes | 100 / 15 min | User ID |
+| Demo starts | 12 / 1 h | Client IP |
 
 Client IPs come from `req.ip` with Express `trust proxy` set to `TRUST_PROXY` hops (default 1 in production), so users behind the host's proxy get separate buckets and a client can't dodge limits by sending its own `X-Forwarded-For`.
 
@@ -588,14 +610,16 @@ node seed.js
 
 > ⚠️ **The seed script wipes all collections** before inserting demo data. Never run it against a database you care about.
 
-Seeded demo tenants (**all passwords `password123`**):
+`node seed.js` creates the roles and a persistent copy of the Fernway workspace, built from the same template as the demo sandboxes (`backend/demo/template.js`). Every account's password is `password123`:
 
-| Tenant | Invite Code | Accounts |
+| Account | Role | Works on |
 |---|---|---|
-| Stark Industries | `STARKX` | `tony@stark.com` (Admin), `pepper@stark.com` / `rhodey@stark.com` (PMs), 7 Team Members incl. `peter@stark.com` |
-| Wayne Enterprises | `BATMAN` | `bruce@wayne.com` (Admin), `dick@wayne.com` (Member) |
+| `maya@fernway.example` | Admin | Everything; Head of Product |
+| `daniel@fernway.example`, `priya@fernway.example` | Project Manager | Mobile app 3.0 and Website relaunch; Partner API, SOC 2 and Brand refresh |
+| `lucas@fernway.example`, `aisha@fernway.example`, `sam@fernway.example`, `jonas@fernway.example`, `elena@fernway.example` | Team Member | Their projects' tasks |
+| `grace@fernway.example` | Stakeholder | A partner following the Partner API |
 
-The login page includes one-click buttons for four of these accounts.
+The invite code is generated; an Admin finds it in Settings. `node seed.js --empty` creates the roles only, for a production database that should start clean. The one-click buttons on the landing and sign-in pages don't use these accounts: each opens a private sandbox.
 
 ---
 
@@ -650,12 +674,18 @@ TeamPulse is two deployables: a static frontend and a containerized API with Mon
 | API + Socket.IO | Render | https://teampulse-backend-338f.onrender.com (health: `/api/health`) |
 | Database | MongoDB | configured through `MONGO_URI` on the API |
 
-For this deployment, `CLIENT_URL` on the API is `https://teampulseapp.vercel.app`, and `VITE_API_URL` on Vercel is `https://teampulse-backend-338f.onrender.com`.
+The browser only ever talks to the frontend's domain: `frontend/vercel.json` proxies `/api` and `/socket.io` to Render. That keeps the session cookie first-party, which Safari and every iOS browser require (they block cookies set by another site, such as `onrender.com` under `vercel.app`).
+
+This deployment's settings:
+- **Vercel:** `VITE_API_URL` unset, `VITE_SOCKET_TRANSPORTS=polling`.
+- **Render:** `CLIENT_URL=https://teampulseapp.vercel.app`.
 
 ### Frontend (Vercel)
 
-- Import the repository with **Root Directory** `frontend`; Vercel detects Vite (`npm run build`, output `dist`). `frontend/vercel.json` rewrites every route to `index.html`.
-- Set `VITE_API_URL` to the API origin, without `/api` (for example `https://api.example.com`). Leave it unset only if the frontend's own domain proxies `/api` and `/socket.io` to the API.
+- Import the repository with **Root Directory** `frontend`; Vercel detects Vite (`npm run build`, output `dist`).
+- `frontend/vercel.json` proxies `/api/*` and `/socket.io/*` to the API and rewrites every other route to `index.html`. If you fork the project, point those two rewrites at your own API host.
+- Leave `VITE_API_URL` unset so the app calls its own domain. Only set it, to the API origin without `/api`, if you serve the API from another site and accept that Safari will block the session cookie.
+- Set `VITE_SOCKET_TRANSPORTS=polling`. Vercel rewrites can't carry WebSockets, so Socket.IO uses HTTP long-polling, which is still real-time.
 - `VITE_DEMO_ACCOUNTS=false` hides the one-click demo accounts.
 
 ### API (any container host)
@@ -668,13 +698,13 @@ Run the image CI publishes, `ghcr.io/robert2101/teampulse-backend:latest`, or bu
 | `MONGO_URI` | A MongoDB replica set such as Atlas; transactions are used when available |
 | `JWT_SECRET` | A long random string; changing it signs everyone out |
 | `CLIENT_URL` | The frontend origin exactly, e.g. `https://teampulse.vercel.app`. CORS and Socket.IO accept only this origin |
-| `TRUST_PROXY` | Proxy hops in front of the API (`1` on most platforms), so rate limits see real client IPs |
-| `COOKIE_SAME_SITE` | Leave unset when the API is on another site. Set `lax` when the app and API share a site (e.g. `app.example.com` and `api.example.com`) |
+| `TRUST_PROXY` | Number of proxies between the browser and the API, so rate limits see real client IPs. Behind the Vercel proxy that is at least 2 (Vercel plus the host's load balancer). Every access-log line starts with the IP the API resolved; if it shows a proxy instead of a visitor, raise the value |
+| `COOKIE_SAME_SITE` | Optional. `lax` is safe once every request goes through the frontend's domain (proxy or shared site); the default `none` also works |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Optional: caching and rate limits (both fail open without Redis) |
 | `CLOUDINARY_*`, `GEMINI_API_KEY` | Optional: file uploads and the AI assistant |
 
 - **Health check:** point the platform's health check and an uptime monitor at `GET /api/health`. It answers 200 when the API and database are up, 503 otherwise.
-- **HTTPS:** both sites need HTTPS in production, because the cross-site session cookie is `Secure`.
+- **HTTPS:** required in production, because the session cookie is `Secure`.
 - **Demo data:** `node seed.js` loads the demo workspace, but it **wipes the database `MONGO_URI` points at**. Run it only against a database reserved for the demo.
 
 ### GitHub configuration
@@ -699,7 +729,7 @@ cd frontend && npm run test:e2e # Playwright smoke tests (needs a local MongoDB;
   - tenant isolation and the role matrix;
   - allow-listed updates, session revocation, CSRF and rate-limit keys;
   - socket room checks, file access, transactions and the AI tool (Gemini mocked).
-- **End-to-end tests** start the API and the Vite dev server, then seed a throwaway database before running. It is `mongodb://127.0.0.1:27017/teampulse_e2e` by default; override it with `E2E_MONGO_URI`. The setup refuses any database whose name doesn't contain `e2e` or `test`. Run `npx playwright install chromium` once.
+- **End-to-end tests** start the API and the Vite dev server, then seed a throwaway database before running. Tests that change data each open their own demo sandbox, so they can't affect one another. It is `mongodb://127.0.0.1:27017/teampulse_e2e` by default; override it with `E2E_MONGO_URI`. The setup refuses any database whose name doesn't contain `e2e` or `test`. Run `npx playwright install chromium` once.
 
 ---
 
@@ -735,7 +765,8 @@ TeamPulse/
 │   ├── app.js                     # Express app: CORS, CSRF, health check, routes
 │   ├── server.js                  # Env, Socket.IO, Mongo connection, listen
 │   ├── Dockerfile                 # Multi-stage production image
-│   ├── seed.js                    # Multi-tenant demo data seeder (wipes the database)
+│   ├── seed.js                    # Roles + the Fernway workspace (wipes the database); --empty for roles only
+│   ├── demo/template.js           # The Fernway company: people, projects, tasks, threads, files, chats
 │   ├── config/
 │   │   ├── redis.js               # Upstash client, cache helpers, rate limiter
 │   │   └── cloudinary.js          # Cloudinary SDK config
@@ -749,7 +780,7 @@ TeamPulse/
 │   ├── controllers/               # auth, project, task, comment,
 │   │                              # file, activity, chatbot
 │   ├── routes/                    # One router per domain
-│   ├── services/                  # task updates (shared by REST and AI), cascade cleanup
+│   ├── services/                  # task updates (shared by REST and AI), cascade cleanup, demo sandboxes
 │   ├── socket/socket.js           # JWT handshake auth, rooms, typing relay
 │   ├── utils/                     # projectAccess, session, transaction, logger, activityLogger
 │   └── tests/                     # Vitest + Supertest API tests
@@ -769,7 +800,9 @@ TeamPulse/
 │   │       ├── TaskModal/         # Details panel, header, description,
 │   │       │                      # attachments, real-time chat
 │   │       ├── files/             # DropZone, Preview (lightbox, download)
-│   │       ├── DemoAccounts.jsx   # One-click demo sign-in
+│   │       ├── landing/           # Product preview with the role switch, screen fragments, reveal
+│       ├── DemoPersonas.jsx / DemoSwitcher.jsx  # Open a sandbox as a persona; switch persona
+│       ├── CommandPalette.jsx # ⌘K: jump to a project or task
 │   │       └── ui/                # shadcn/Radix primitives
 │   └── vercel.json                # SPA rewrites
 └── tests/load/k6/                 # 11 load-test scenarios + helpers + thresholds

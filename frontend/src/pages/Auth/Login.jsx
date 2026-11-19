@@ -5,7 +5,7 @@ import { Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
 import { AuthShell } from "./AuthShell";
 import { btn, field, label } from "../../lib/styles";
 import { errorMessage } from "../../lib/format";
-import { DemoAccounts } from "../../components/DemoAccounts";
+import { DemoPersonas } from "../../components/DemoPersonas";
 import { demoEnabled } from "../../lib/demo";
 
 export const Login = () => {
@@ -105,9 +105,9 @@ export const Login = () => {
 
             {demoEnabled && (
                 <div className="mt-8 border-t border-gray-200 pt-6">
-                    <p className="text-sm font-medium text-gray-900">Or open the demo workspace</p>
-                    <p className="mt-0.5 mb-3 text-xs text-gray-600">Sample company and data. One click signs you in.</p>
-                    <DemoAccounts compact />
+                    <p className="text-sm font-medium text-gray-900">Or explore a demo workspace</p>
+                    <p className="mt-0.5 mb-3 text-xs text-gray-600">Your own private copy of a sample company, as any of its people. Resets after 24 hours.</p>
+                    <DemoPersonas compact />
                 </div>
             )}
         </AuthShell>

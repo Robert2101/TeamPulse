@@ -13,6 +13,7 @@ import commentRoutes from './routes/comment.route.js';
 import chatbotRoutes from './routes/chatbot.route.js';
 import activityRoutes from './routes/activity.route.js';
 import fileRoutes from './routes/file.route.js';
+import demoRoutes from './routes/demo.route.js';
 
 // The Express app, without a listening server or database connection, so tests can import it directly.
 const app = express();
@@ -33,7 +34,8 @@ app.use(requireJsonBody);
 app.use(express.json());
 app.use(cookieParser()); // Populates req.cookies
 app.use(csrfProtection);
-app.use(morgan(':method :url :status - :response-time ms', {
+// :remote-addr is req.ip, so the log shows whether TRUST_PROXY resolves the real client behind the proxies.
+app.use(morgan(':remote-addr :method :url :status - :response-time ms', {
     stream: { write: (message) => logger.info(message.trim()) },
     skip: (req) => req.path === '/api/health',
 }));
@@ -57,6 +59,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/demo', demoRoutes);
 
 // Global multer error handler
 app.use((err, req, res, next) => {

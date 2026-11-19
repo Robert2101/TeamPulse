@@ -349,7 +349,7 @@ export const Settings = () => {
                                                 <p className="truncate text-sm font-semibold text-gray-900">
                                                     {member.fullName || "Unnamed member"} {isSelf && <span className="font-normal text-gray-500">(you)</span>}
                                                 </p>
-                                                <p className="truncate text-xs text-gray-600">{member.emailAddress}</p>
+                                                <p className="truncate text-xs text-gray-600">{[member.jobTitle, member.emailAddress].filter(Boolean).join(" · ")}</p>
                                                 {member.lastLogin && <p className="mt-0.5 text-xs text-gray-500">Last sign-in {formatDate(member.lastLogin)}</p>}
                                             </div>
                                         </div>

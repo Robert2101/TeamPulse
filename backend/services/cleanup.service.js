@@ -3,6 +3,7 @@ import Comment from '../models/comment.model.js';
 import FileAsset from '../models/fileAsset.model.js';
 import cloudinary from '../config/cloudinary.js';
 import logger from '../utils/logger.js';
+import { isDemoAsset } from '../utils/demoAssets.js';
 
 /**
  * Deletes tasks with their comments and the file records attached to either. Returns the deleted
@@ -28,7 +29,8 @@ export const deleteTasksCascade = async (taskIds, session) => {
 };
 
 /** Best-effort removal of stored files from Cloudinary, a few at a time. Failures are logged, never thrown. */
-export const destroyStoredFiles = async (files) => {
+export const destroyStoredFiles = async (allFiles) => {
+    const files = allFiles.filter((file) => !isDemoAsset(file));
     for (let i = 0; i < files.length; i += 10) {
         const batch = files.slice(i, i + 10);
         const results = await Promise.allSettled(batch.map((file) =>

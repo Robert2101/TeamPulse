@@ -18,8 +18,10 @@ api.interceptors.response.use(
         // Session expired: clear local state and send the user to sign in once (no loop on public pages).
         const onPublicPage = ['/', '/login', '/register'].includes(window.location.pathname);
         if (err.response?.status === 401 && !onPublicPage) {
+            // Demo workspaces expire after 24 hours: send those visitors back to start a fresh one.
+            const wasDemo = useStore.getState().user?.workspace?.isDemo;
             useStore.setState({ user: null, projects: [], projectsLoaded: false });
-            window.location.href = '/login?expired=1';
+            window.location.href = wasDemo ? '/?demo=expired' : '/login?expired=1';
         }
         return Promise.reject(err);
     }

@@ -16,6 +16,11 @@ const taskSchema = new mongoose.Schema({
         maxlength: 200
     },
 
+    // Sequential per project; shown with the project key (APP-12)
+    number: {
+        type: Number
+    },
+
     taskDescription: {
         type: String,
         trim: true
