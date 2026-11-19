@@ -11,6 +11,7 @@ import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 import { pick } from '../utils/pick.js';
 import { withTransaction } from '../utils/transaction.js';
 import { deleteTasksCascade, destroyStoredFiles } from '../services/cleanup.service.js';
+import { demoLocked, isDemoUser } from '../utils/demo.js';
 
 // Fields a PUT may change; only Admins may also reassign the Project Manager.
 const PROJECT_FIELDS = [
@@ -220,6 +221,7 @@ export const updateProject = async (req, res) => {
 export const deleteProject = async (req, res) => {
     try {
         const { id } = req.params;
+        if (isDemoUser(req.dbUser)) return demoLocked(res, 'Deleting projects');
 
         const project = await Project.findOne({ _id: id, workspace: req.dbUser.workspace });
         if (!project) {

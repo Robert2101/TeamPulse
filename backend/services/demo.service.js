@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import Workspace, { generateInviteCode } from '../models/workspace.model.js';
@@ -15,9 +14,11 @@ import { delCache, delWorkspaceCacheKeys } from '../config/redis.js';
 import { destroyStoredFiles } from './cleanup.service.js';
 import logger from '../utils/logger.js';
 import { DEMO_FILE_PREFIX, isDemoAsset } from '../utils/demoAssets.js';
-import { COMPANY, PERSONAS, PEOPLE, FILES, PROJECTS, CHATS } from '../demo/template.js';
+import { COMPANY, PEOPLE, FILES, PROJECTS, CHATS } from '../demo/template.js';
 
-export const SANDBOX_TTL_HOURS = 24;
+// Every demo account signs in with this password; it is shown on the sign-in page.
+export const DEMO_PASSWORD = 'password123';
+export const demoEmail = (key) => `${key}@${COMPANY.domain}`;
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -25,29 +26,27 @@ const STATUS_PATH = ['In-Progress', 'Review', 'Done'];
 const oid = () => new mongoose.Types.ObjectId();
 
 /**
- * Builds the Fernway workspace from the template, in memory, with every date relative to `now`.
- * sandbox: a per-visitor demo (expires, unique emails); otherwise a persistent workspace (local seed)
- * with emails from `emailFor(personKey)`.
+ * Builds the Fernway demo workspace in memory, with every date relative to `now`.
+ * `workspaceId` and `userIds` (person key -> id) keep ids stable when the workspace is rebuilt, so
+ * signed-in visitors stay signed in across the nightly reset.
  */
-export const buildWorkspace = async ({ now = new Date(), sandbox = true, passwordHash, emailFor, assetOrigin }) => {
+export const buildWorkspace = async ({ now = new Date(), passwordHash, workspaceId: keepWorkspaceId, userIds: keepUserIds = {}, assetOrigin }) => {
     const roles = await ensureRoles();
     const at = (hoursAgo) => new Date(now.getTime() - hoursAgo * HOUR);
     const inDays = (days) => new Date(now.getTime() + days * DAY);
-    const workspaceId = oid();
-    const tag = workspaceId.toString().slice(-6);
+    const workspaceId = keepWorkspaceId || oid();
     const origin = (assetOrigin || process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
 
     const users = Object.entries(PEOPLE).map(([key, person]) => ({
-        _id: oid(),
+        _id: keepUserIds[key] || oid(),
         key,
         fullName: person.fullName,
         jobTitle: person.jobTitle,
-        emailAddress: emailFor ? emailFor(key) : `${key}+${tag}@${COMPANY.domain}`,
+        emailAddress: demoEmail(key),
         password: passwordHash,
         role: roles[person.role]._id,
         workspace: workspaceId,
         status: 'Active',
-        demoPersona: Object.entries(PERSONAS).find(([, k]) => k === key)?.[0],
         joiningDate: at(24 * 120),
         lastLogin: at(2 + Object.keys(PEOPLE).indexOf(key) * 3),
     }));
@@ -58,8 +57,7 @@ export const buildWorkspace = async ({ now = new Date(), sandbox = true, passwor
         workspaceName: COMPANY.name,
         owner: userId.maya,
         inviteCode: generateInviteCode(),
-        isDemo: sandbox,
-        ...(sandbox && { expiresAt: new Date(now.getTime() + SANDBOX_TTL_HOURS * HOUR) }),
+        isDemo: true,
         createdAt: at(3000),
     };
 
@@ -154,12 +152,10 @@ export const buildWorkspace = async ({ now = new Date(), sandbox = true, passwor
         user: userId[who], query: c.query, responseGenerated: c.reply, classifiedIntent: c.intent, createdAt: at(c.h),
     })));
 
-    const personaIds = Object.fromEntries(Object.entries(PERSONAS).map(([persona, key]) => [persona, userId[key]]));
-    return { workspace, users: users.map(({ key, ...u }) => u), projects, tasks, comments, files, activities, chats, personaIds };
+    return { workspace, users: users.map(({ key, ...u }) => u), projects, tasks, comments, files, activities, chats };
 };
 
-/** Inserts a built workspace in one transaction, so a failure leaves nothing half-made. */
-export const insertWorkspace = (data) => withTransaction(async (session) => {
+const insert = async (data, session) => {
     await Workspace.create([data.workspace], { session });
     await User.insertMany(data.users, { session });
     await Project.insertMany(data.projects, { session });
@@ -168,49 +164,55 @@ export const insertWorkspace = (data) => withTransaction(async (session) => {
     await FileAsset.insertMany(data.files, { session });
     await Activity.insertMany(data.activities, { session });
     await ChatbotInteraction.insertMany(data.chats, { session });
-});
-
-/** A private copy of the demo company for one visitor. Returns the id of the persona to sign in as. */
-export const createSandbox = async ({ persona = 'admin', now = new Date() } = {}) => {
-    if (!PERSONAS[persona]) throw Object.assign(new Error('Unknown demo persona'), { status: 400 });
-    // Nobody signs in to a sandbox with a password; sessions are issued directly.
-    const passwordHash = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), 10);
-    const data = await buildWorkspace({ now, sandbox: true, passwordHash });
-    await insertWorkspace(data);
-    return { workspaceId: data.workspace._id, userId: data.personaIds[persona] };
 };
 
-/** Deletes a sandbox and everything in it, including files visitors uploaded to Cloudinary. */
-export const purgeSandbox = async (workspaceId) => {
-    const userIds = (await User.find({ workspace: workspaceId }).select('_id').lean()).map((u) => u._id);
-    const uploads = (await FileAsset.find({ workspace: workspaceId }).lean()).filter((f) => !isDemoAsset(f));
-    await withTransaction(async (session) => {
-        await Activity.deleteMany({ workspace: workspaceId }, { session });
-        await Comment.deleteMany({ workspace: workspaceId }, { session });
-        await Task.deleteMany({ workspace: workspaceId }, { session });
-        await FileAsset.deleteMany({ workspace: workspaceId }, { session });
-        await Project.deleteMany({ workspace: workspaceId }, { session });
-        await ChatbotInteraction.deleteMany({ user: { $in: userIds } }, { session });
-        await User.deleteMany({ workspace: workspaceId }, { session });
-        await Workspace.deleteOne({ _id: workspaceId, isDemo: true }, { session });
-    });
-    await destroyStoredFiles(uploads);
-    await Promise.all(userIds.map((id) => delCache(`session:user:${id}`)));
-    await delWorkspaceCacheKeys(workspaceId.toString());
+const remove = async (workspaceId, userIds, session) => {
+    await Activity.deleteMany({ workspace: workspaceId }, { session });
+    await Comment.deleteMany({ workspace: workspaceId }, { session });
+    await Task.deleteMany({ workspace: workspaceId }, { session });
+    await FileAsset.deleteMany({ workspace: workspaceId }, { session });
+    await Project.deleteMany({ workspace: workspaceId }, { session });
+    await ChatbotInteraction.deleteMany({ user: { $in: userIds } }, { session });
+    await User.deleteMany({ workspace: workspaceId }, { session });
+    await Workspace.deleteOne({ _id: workspaceId, isDemo: true }, { session });
 };
 
-/** Purges sandboxes past their expiry. Safe to run often; runs on startup, on a timer and on demo starts. */
-export const purgeExpiredSandboxes = async ({ now = new Date(), limit = 25 } = {}) => {
-    const expired = await Workspace.find({ isDemo: true, expiresAt: { $lt: now } }).select('_id').limit(limit).lean();
-    for (const { _id } of expired) {
-        try {
-            await purgeSandbox(_id);
-        } catch (error) {
-            logger.warn(`Failed to purge demo sandbox ${_id}: ${error.message}`);
-        }
+/**
+ * Replaces the demo workspace with a fresh build: same company, people and story, dates recalculated
+ * from `now`. Only workspaces marked isDemo are touched. Everything in them goes, including people who
+ * joined with the invite code and files visitors uploaded; the demo accounts keep their ids, so their
+ * sessions survive. Runs in one transaction, so visitors never see a half-built workspace.
+ */
+export const resetDemoWorkspace = async ({ now = new Date() } = {}) => {
+    await ensureRoles();
+    const demos = await Workspace.find({ isDemo: true }).select('_id').sort({ createdAt: 1 }).lean();
+    const keep = demos[0]?._id;
+
+    const members = await User.find({ workspace: { $in: demos.map((w) => w._id) } }).select('_id emailAddress workspace +tokenVersion').lean();
+    const userIds = {};
+    for (const key of Object.keys(PEOPLE)) {
+        const found = members.find((u) => keep && u.workspace.equals(keep) && u.emailAddress === demoEmail(key));
+        if (found) userIds[key] = found._id;
     }
-    if (expired.length) logger.info(`Purged ${expired.length} expired demo sandbox(es)`);
-    return expired.length;
-};
+    const uploads = (await FileAsset.find({ workspace: { $in: demos.map((w) => w._id) } }).lean()).filter((f) => !isDemoAsset(f));
 
-export { PERSONAS };
+    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+    const data = await buildWorkspace({ now, passwordHash, workspaceId: keep, userIds });
+    // Keep each account's session version, so cookies issued before the reset stay valid.
+    for (const user of data.users) {
+        const before = members.find((u) => u._id.equals(user._id));
+        if (before?.tokenVersion) user.tokenVersion = before.tokenVersion;
+    }
+    await withTransaction(async (session) => {
+        for (const { _id } of demos) {
+            await remove(_id, members.filter((u) => u.workspace.equals(_id)).map((u) => u._id), session);
+        }
+        await insert(data, session);
+    });
+
+    await destroyStoredFiles(uploads);
+    await Promise.all(members.map((u) => delCache(`session:user:${u._id}`)));
+    await Promise.all(demos.map((w) => delWorkspaceCacheKeys(w._id.toString())));
+    logger.info(`Demo workspace ${demos.length ? 'rebuilt' : 'created'}: ${data.tasks.length} tasks, ${data.activities.length} history entries`);
+    return data;
+};

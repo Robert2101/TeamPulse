@@ -1,12 +1,10 @@
-// The demo company every sandbox (and the local seed) is built from: Fernway, a travel-booking startup.
-// Times are relative to the moment the sandbox is created: `h` = hours ago, `due` = days from now.
+// The demo company: Fernway, a travel-booking startup. seed.js builds it, and the nightly reset rebuilds it.
+// Times are relative to the moment it is built: `h` = hours ago, `due` = days from now.
 // The data is chosen to exercise every feature: all four roles, every project and task state, overdue
 // and due-soon work, unassigned tasks, threads with pinned and edited comments, files and history.
 
 export const COMPANY = { name: 'Fernway', domain: 'fernway.example' };
 
-// The four people a visitor can sign in as. Keys match DEMO_PERSONAS in frontend/src/lib/demo.js.
-export const PERSONAS = { admin: 'maya', manager: 'daniel', member: 'lucas', stakeholder: 'grace' };
 
 export const PEOPLE = {
     maya: { fullName: 'Maya Chen', role: 'Admin', jobTitle: 'Head of Product' },

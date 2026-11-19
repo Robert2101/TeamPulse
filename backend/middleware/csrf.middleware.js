@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 // These start a new session (an existing one may be stale); they are rate-limited and accept JSON only.
-const EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/signup', '/api/demo/start']);
+const EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/signup']);
 
 /**
  * CSRF token for a session: an HMAC of the user id and tokenVersion. Only our frontend can read it

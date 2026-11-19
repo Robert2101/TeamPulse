@@ -26,17 +26,13 @@ const workspaceSchema = new mongoose.Schema({
         unique: true,
         default: generateInviteCode
     },
-    // Demo sandboxes: one per visitor, built from backend/demo/template.js and purged after expiresAt.
+    // The shared demo workspace (backend/demo/template.js), rebuilt every night. Its accounts can't
+    // change anything that would lock other visitors out (see utils/demo.js).
     isDemo: {
         type: Boolean,
         default: false
-    },
-    expiresAt: {
-        type: Date
     }
 }, { timestamps: true });
-
-workspaceSchema.index({ isDemo: 1, expiresAt: 1 });
 
 const Workspace = mongoose.model("Workspace", workspaceSchema);
 export default Workspace;

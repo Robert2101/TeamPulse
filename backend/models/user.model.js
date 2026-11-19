@@ -86,11 +86,6 @@ const userSchema = new mongoose.Schema({
         type: Date
     },
 
-    // Which demo persona this user is in a sandbox workspace (admin, manager, member, stakeholder)
-    demoPersona: {
-        type: String
-    },
-
     // Embedded in every JWT; bumping it revokes all tokens issued before (logout, password change, ...)
     tokenVersion: {
         type: Number,
