@@ -65,7 +65,7 @@ k6 run tests/load/k6/scenarios/01-smoke.js
 | Variable | Default | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost:5001` | TeamPulse backend URL |
-| `TEST_USER_EMAIL` | `tony@stark.com` | Login email (from seed data) |
+| `TEST_USER_EMAIL` | `maya@fernway.example` | Login email (from seed data) |
 | `TEST_USER_PASSWORD` | `password123` | Login password (from seed data) |
 | `PROJECT_ID` | *(auto-discovered)* | MongoDB ObjectId of a test project |
 | `TASK_ID` | *(auto-discovered)* | MongoDB ObjectId of a test task |

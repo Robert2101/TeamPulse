@@ -4,8 +4,11 @@ import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } 
 import { btn, field, label } from "../lib/styles";
 import { errorMessage } from "../lib/format";
 
-export const CreateTaskModal = ({ api, project, onTaskCreated }) => {
-    const [isOpen, setIsOpen] = useState(false);
+// Opens from its own button, or is controlled by the board (the C shortcut) through open/onOpenChange.
+export const CreateTaskModal = ({ api, project, onTaskCreated, open, onOpenChange }) => {
+    const [internalOpen, setInternalOpen] = useState(false);
+    const isOpen = open ?? internalOpen;
+    const setIsOpen = onOpenChange ?? setInternalOpen;
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 

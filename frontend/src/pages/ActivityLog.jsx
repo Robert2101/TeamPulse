@@ -9,6 +9,22 @@ import { cn } from "../lib/utils";
 
 const ENTITY_ICON = { Task: CheckSquare, Comment: MessageSquare, Project: FolderKanban };
 
+// Events grouped under Today, Yesterday, then the date.
+const groupByDay = (logs) => {
+    const startOf = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const today = startOf(Date.now());
+    const groups = new Map();
+    for (const log of logs) {
+        const day = startOf(log.createdAt);
+        const diff = Math.round((today - day) / 86400000);
+        const label = diff === 0 ? "Today" : diff === 1 ? "Yesterday"
+            : new Date(day).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+        if (!groups.has(label)) groups.set(label, { label, isToday: diff === 0, logs: [] });
+        groups.get(label).logs.push(log);
+    }
+    return [...groups.values()];
+};
+
 const FIELD_LABELS = { taskName: "title", taskDescription: "description", assignee: "assignee", dueDate: "due date", priority: "priority" };
 const listOf = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`);
 const Strong = ({ children }) => <span className="font-medium text-gray-900">{children}</span>;
@@ -154,52 +170,54 @@ export const ActivityLog = () => {
                         </p>
                     </div>
                 ) : (
-                    <ol className="space-y-6">
-                        {filteredLogs.map((log, index) => {
-                            const Icon = ENTITY_ICON[log.entityType] || Activity;
-                            const isDelete = (log.action || "").toLowerCase().includes("delete");
-                            return (
-                                <li key={log._id} className="group relative flex items-start gap-4">
-                                    {/* Timeline Line */}
-                                    {index !== filteredLogs.length - 1 && (
-                                        <div className="absolute -bottom-6 left-5 top-11 w-px bg-gray-200" aria-hidden="true" />
-                                    )}
-
-                                    {/* Avatar with entity badge */}
-                                    <div className="relative z-10 shrink-0">
-                                        <Avatar name={log.user?.fullName || "System"} src={log.user?.profilePicture} size="lg" ring />
-                                        <span className={cn(
-                                            "absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-white",
-                                            isDelete ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"
-                                        )} aria-hidden="true">
-                                            <Icon size={11} />
-                                        </span>
-                                    </div>
-
-                                    <div className="flex min-w-0 flex-1 flex-col pt-2">
-                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                                            {generateLogSentence(log)}
-                                            <time
-                                                dateTime={log.createdAt}
-                                                title={new Date(log.createdAt).toLocaleString()}
-                                                className="tabular shrink-0 text-xs text-gray-600"
-                                            >
-                                                {relativeTime(log.createdAt)}
-                                            </time>
-                                        </div>
-
-                                        {/* Raw IDs for admins on hover */}
-                                        {isAdmin && (
-                                            <div className="hidden pt-1 font-mono text-[11px] text-gray-500 group-hover:flex group-hover:flex-wrap group-hover:gap-x-3">
-                                                <span>Entity {log.entityId}</span>
-                                                <span>User {log.user?._id}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </li>
-                            );
-                        })}
-                    </ol>
+                    <div className="flex flex-col gap-8">
+                        {groupByDay(filteredLogs).map(({ label, logs: dayLogs, isToday }) => (
+                            <section key={label} aria-label={label}>
+                                <h2 className="mb-4 text-xs font-medium text-gray-500">{label}</h2>
+                                <ol className="flex flex-col gap-5">
+                                    {dayLogs.map((log, index) => {
+                                        const Icon = ENTITY_ICON[log.entityType] || Activity;
+                                        const isDelete = (log.action || "").toLowerCase().includes("delete");
+                                        return (
+                                            <li key={log._id} className="group relative flex items-start gap-3.5">
+                                                {index !== dayLogs.length - 1 && (
+                                                    <div className="absolute -bottom-5 left-4 top-10 w-px bg-gray-200" aria-hidden="true" />
+                                                )}
+                                                <div className="relative z-10 shrink-0">
+                                                    <Avatar name={log.user?.fullName || "System"} src={log.user?.profilePicture} size="md" ring />
+                                                    <span className={cn(
+                                                        "absolute -bottom-1 -right-1 flex size-4.5 items-center justify-center rounded-full ring-2 ring-white",
+                                                        isDelete ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"
+                                                    )} aria-hidden="true">
+                                                        <Icon size={10} />
+                                                    </span>
+                                                </div>
+                                                <div className="flex min-w-0 flex-1 flex-col pt-1.5">
+                                                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                                                        {generateLogSentence(log)}
+                                                        <time
+                                                            dateTime={log.createdAt}
+                                                            title={new Date(log.createdAt).toLocaleString()}
+                                                            className="tabular shrink-0 text-xs text-gray-500"
+                                                        >
+                                                            {isToday ? relativeTime(log.createdAt) : new Date(log.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                                                        </time>
+                                                    </div>
+                                                    {/* Raw IDs for admins on hover */}
+                                                    {isAdmin && (
+                                                        <div className="hidden pt-1 font-mono text-[11px] text-gray-500 group-hover:flex group-hover:flex-wrap group-hover:gap-x-3">
+                                                            <span>Entity {log.entityId}</span>
+                                                            <span>User {log.user?._id}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ol>
+                            </section>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>

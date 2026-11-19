@@ -25,8 +25,18 @@ const workspaceSchema = new mongoose.Schema({
         type: String,
         unique: true,
         default: generateInviteCode
+    },
+    // Demo sandboxes: one per visitor, built from backend/demo/template.js and purged after expiresAt.
+    isDemo: {
+        type: Boolean,
+        default: false
+    },
+    expiresAt: {
+        type: Date
     }
 }, { timestamps: true });
+
+workspaceSchema.index({ isDemo: 1, expiresAt: 1 });
 
 const Workspace = mongoose.model("Workspace", workspaceSchema);
 export default Workspace;
