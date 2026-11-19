@@ -10,17 +10,10 @@ export const getActivityLogs = async (req, res) => {
     try {
         const { entityId: projectId } = req.params;
 
-        // 1. MUST perform Project lookup & Workspace/RBAC check FIRST
-        const project = await Project.findById(projectId);
+        // 1. Tenant-scoped lookup first: a project in another workspace answers exactly like one that doesn't exist.
+        const project = await Project.findOne({ _id: projectId, workspace: req.dbUser.workspace });
         if (!project) {
             return res.status(404).json({ message: "Project not found." });
-        }
-
-        const userWs = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
-        const projectWs = project.workspace?._id?.toString() || project.workspace?.toString();
-        if (userWs !== projectWs) {
-            logger.warn(`Cross-tenant security alert: User ${req.dbUser.emailAddress} attempted to read logs of Project ${projectId} from another workspace.`);
-            return res.status(403).json({ message: "Access Denied. Project belongs to another workspace." });
         }
 
         // The audit log is a management tool: Admins, and Project Managers on projects they can access.

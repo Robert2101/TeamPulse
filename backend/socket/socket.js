@@ -74,24 +74,15 @@ export const initSocket = (server) => {
 
         socket.on("join-project", async (projectId) => {
             try {
-                const project = await Project.findById(projectId);
-                if (!project) return;
+                // Tenant-scoped lookup: a room in another workspace is refused exactly like one that doesn't exist,
+                // so the reply never reveals which project ids exist elsewhere. The server log keeps the attempt.
+                const project = await Project.findOne({ _id: projectId, workspace: socket.dbUser.workspace?._id || socket.dbUser.workspace });
 
-                // Multi-Tenant Isolation Check: Ensure project belongs to user's workspace
-                const userWs = socket.dbUser.workspace?._id?.toString() || socket.dbUser.workspace?.toString();
-                const projectWs = project.workspace?._id?.toString() || project.workspace?.toString();
-
-                if (userWs !== projectWs) {
-                    logger.warn(`🚨 Cross-Tenant Intrusion Attempt: ${socket.dbUser.fullName} from workspace ${userWs} tried to join Project Room ${projectId} in workspace ${projectWs}`);
-                    return socket.emit("error", { message: "You are not authorized to join project rooms outside your workspace." });
-                }
-
-                // Role-Based Security for WebSocket Rooms
-                if (canAccessProject(project, socket.dbUser)) {
+                if (project && canAccessProject(project, socket.dbUser)) {
                     socket.join(projectId);
                     logger.info(`${socket.dbUser.fullName} securely joined Project Room: ${projectId}`);
                 } else {
-                    logger.warn(`Intrusion Attempt: ${socket.dbUser.fullName} tried to join unauthorized Project Room: ${projectId}`);
+                    logger.warn(`Refused join-project: ${socket.dbUser.fullName} (workspace ${socket.dbUser.workspace?._id || socket.dbUser.workspace}) asked for room ${projectId}, which is outside their workspace or their projects`);
                     socket.emit("error", { message: "You are not authorized to join this project's real-time feed." });
                 }
 

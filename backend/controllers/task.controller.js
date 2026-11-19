@@ -6,6 +6,7 @@ import { getIO } from '../socket/socket.js';
 import { getCache, setCache, delCache } from '../config/redis.js';
 import { canAccessProject, canManageProject } from '../utils/projectAccess.js';
 import { pick } from '../utils/pick.js';
+import { accessibleProjectFilter } from './project.controller.js';
 import { applyTaskUpdate } from '../services/task.service.js';
 import { withTransaction } from '../utils/transaction.js';
 import { deleteTasksCascade, destroyStoredFiles } from '../services/cleanup.service.js';
@@ -32,7 +33,15 @@ export const createTask = async (req, res) => {
             return res.status(403).json({ message: "Access Denied. You cannot create tasks in a project you do not belong to." });
         }
 
+        // Next number for the project's task keys (APP-12); $inc is atomic, so concurrent creates can't collide.
+        const counter = await Project.findOneAndUpdate(
+            { _id: project._id },
+            { $inc: { taskCounter: 1 } },
+            { returnDocument: 'after', projection: { taskCounter: 1 } }
+        );
+
         const newTask = new Task({
+            number: counter.taskCounter,
             taskName,
             taskDescription,
             projectReference,
@@ -75,17 +84,10 @@ export const getTasksByProject = async (req, res) => {
     try {
         const { projectId } = req.params;
 
-        // 1. MUST perform Project lookup & Workspace/RBAC authorization check FIRST
-        const project = await Project.findById(projectId);
+        // 1. Tenant-scoped lookup first: a project in another workspace answers exactly like one that doesn't exist.
+        const project = await Project.findOne({ _id: projectId, workspace: req.dbUser.workspace });
         if (!project) {
             return res.status(404).json({ message: "Project not found." });
-        }
-
-        const userWs = req.dbUser.workspace?._id?.toString() || req.dbUser.workspace?.toString();
-        const projectWs = project.workspace?._id?.toString() || project.workspace?.toString();
-        if (userWs !== projectWs) {
-            logger.warn(`Cross-tenant security alert: User ${req.dbUser.emailAddress} attempted to access Project ${projectId} from another workspace.`);
-            return res.status(403).json({ message: "Access Denied. Project belongs to another workspace." });
         }
 
         if (!canAccessProject(project, req.dbUser)) {
@@ -154,7 +156,7 @@ export const getDashboardStats = async (req, res) => {
 export const getMyTasks = async (req, res) => {
     try {
         const tasks = await Task.find({ assignee: req.dbUser._id, workspace: req.dbUser.workspace })
-            .populate('projectReference', 'projectName')
+            .populate('projectReference', 'projectName key')
             .sort({ dueDate: 1 });
         res.status(200).json(tasks);
     } catch (error) {
@@ -245,5 +247,22 @@ export const deleteTask = async (req, res) => {
     } catch (error) {
         logger.error(`Error deleting task (ID: ${req.params.id}): ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: "Internal server error while deleting task." });
+    }
+};
+
+// GET /api/tasks/overview: every task in the projects the caller can see, trimmed for the overview
+// (progress per project, what needs attention, workload).
+export const getOverviewTasks = async (req, res) => {
+    try {
+        const filter = accessibleProjectFilter(req.dbUser);
+        const projectIds = (await Project.find(filter).select('_id').lean()).map((p) => p._id);
+        const tasks = await Task.find({ workspace: filter.workspace, projectReference: { $in: projectIds } })
+            .select('taskName number taskStatus priority dueDate assignee projectReference completedAt createdAt updatedAt')
+            .populate('assignee', 'fullName profilePicture jobTitle')
+            .lean();
+        res.status(200).json(tasks);
+    } catch (error) {
+        logger.error(`Error fetching overview tasks: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ message: "Internal server error while fetching tasks." });
     }
 };

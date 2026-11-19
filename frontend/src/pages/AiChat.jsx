@@ -9,14 +9,14 @@ import { cn } from "../lib/utils";
 const GREETING = {
     id: 1,
     role: "assistant",
-    text: "Hello! I am your TeamPulse AI. I can help you with task queries, project updates, or finding your way around. What do you need?"
+    text: "Ask me about your projects and tasks, or tell me to move one of your tasks, like \"move the API docs to Done\"."
 };
 
 const QUICK_PROMPTS = [
-    "What are my pending tasks?",
-    "Give me a summary of my active projects",
-    "Which of my tasks is the highest priority?",
-    "Update one of my tasks to 'In Progress'"
+    "What should I work on first?",
+    "What's overdue for me?",
+    "Summarize my projects",
+    "Move my most urgent task to Review",
 ];
 
 const ASK_URL = import.meta.env.VITE_API_URL

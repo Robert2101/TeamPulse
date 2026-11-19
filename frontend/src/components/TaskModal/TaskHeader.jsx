@@ -1,17 +1,25 @@
 import { useState } from "react";
-import { Calendar, User, X, Trash2, Loader2, CircleDot, Flag, Link2 } from "lucide-react";
+import { Calendar, X, Trash2, Loader2, Link2, UserRound } from "lucide-react";
 import api from "../../lib/axios";
-import { PriorityBadge, TaskStatusBadge } from "../ui/badges";
+import { TaskStatusBadge } from "../ui/badges";
+import { ChipSelect } from "../ui/chip-select";
+import { PriorityIcon } from "../ui/priority-icon";
+import { Avatar } from "../ui/avatar";
 import { formatDate, isOverdue, errorMessage } from "../../lib/format";
+import { TASK_STATUS_DOT, taskKey } from "../../lib/taskMeta";
 import { toast } from "../../lib/toast";
 import { btn } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 const STATUSES = ["To-Do", "In-Progress", "Review", "Done"];
-const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
+const PRIORITIES = ["Urgent", "High", "Medium", "Low"];
+const UNASSIGNED = "unassigned"; // Radix Select needs a non-empty value
 const toDateInput = (value) => (value ? new Date(value).toISOString().slice(0, 10) : "");
 const chip = "flex min-h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-700";
-const chipSelect = "max-w-[12rem] cursor-pointer truncate bg-transparent py-1 font-medium text-gray-900 focus:outline-none";
+const idOf = (v) => (v && typeof v === "object" ? v._id : v)?.toString();
+
+const statusOptions = STATUSES.map((s) => ({ value: s, label: s, icon: <span className={cn("size-2 shrink-0 rounded-full", TASK_STATUS_DOT[s])} aria-hidden="true" /> }));
+const priorityOptions = PRIORITIES.map((p) => ({ value: p, label: p, icon: <PriorityIcon priority={p} /> }));
 
 export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canDelete, onStatusChange, onTaskUpdated, onTaskDeleted, onClose }) => {
     const [saving, setSaving] = useState(null); // field currently being saved
@@ -43,8 +51,6 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
         }
     };
 
-    const handleAssigneeChange = (newAssigneeId) => saveField("assignee", newAssigneeId || null, "Couldn't change the assignee");
-
     const commitTitle = async () => {
         const next = titleDraft?.trim();
         if (!next || next === task.taskName) { setTitleDraft(null); return; }
@@ -65,12 +71,31 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
     };
 
     const pm = project?.projectManager;
-    const members = (project?.assignedTeamMembers || []).filter((m) => (m._id || m) !== (pm?._id || pm));
+    const people = [
+        ...(project?.assignedTeamMembers || []).filter((m) => idOf(m) !== idOf(pm)),
+        ...(pm ? [pm] : []),
+    ];
+    const assigneeOptions = [
+        { value: UNASSIGNED, label: "Unassigned", icon: <UserRound size={16} className="text-gray-400" aria-hidden="true" /> },
+        ...people.map((m) => ({
+            value: idOf(m),
+            label: m.fullName || m.emailAddress || "Team member",
+            hint: idOf(m) === idOf(pm) ? "Project manager" : undefined,
+            icon: <Avatar name={m.fullName} src={m.profilePicture} size="xs" />,
+        })),
+    ];
+    const assignee = typeof task.assignee === "object" ? task.assignee : null;
     const overdue = isOverdue(task.dueDate, task.taskStatus);
+    const key = taskKey(task, project);
 
     return (
-        <div className="flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4 sm:px-8 sm:py-6">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4 sm:px-8 sm:py-5">
             <div className="min-w-0 flex-1">
+                <p className="mb-1.5 flex min-w-0 items-center gap-2 text-xs text-gray-500">
+                    {key && <span className="tabular font-medium text-gray-600">{key}</span>}
+                    {key && <span aria-hidden="true">·</span>}
+                    <span className="truncate">{project?.projectName}</span>
+                </p>
                 {titleDraft !== null ? (
                     <input
                         autoFocus
@@ -100,33 +125,28 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
                         ) : task.taskName}
                     </h2>
                 )}
+
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     {canMoveTasks ? (
-                        <label className={chip}>
-                            <CircleDot size={14} className="text-gray-500" aria-hidden="true" />
-                            <span className="sr-only">Status</span>
-                            <select className={chipSelect} value={task.taskStatus} onChange={(e) => onStatusChange?.(e.target.value)}>
-                                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </label>
+                        <ChipSelect label="Status" value={task.taskStatus} onValueChange={onStatusChange} options={statusOptions} />
                     ) : (
                         <TaskStatusBadge status={task.taskStatus} className="min-h-8 rounded-lg px-2.5 text-xs" />
                     )}
 
                     {canEdit ? (
-                        <label className={chip}>
-                            {saving === "priority" ? <Loader2 size={14} className="animate-spin text-gray-500" aria-hidden="true" /> : <Flag size={14} className="text-gray-500" aria-hidden="true" />}
-                            <span className="sr-only">Priority</span>
-                            <select className={chipSelect} value={task.priority || "Medium"} disabled={saving === "priority"} onChange={(e) => saveField("priority", e.target.value, "Couldn't change the priority")}>
-                                {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                        </label>
+                        <ChipSelect
+                            label="Priority"
+                            value={task.priority || "Medium"}
+                            busy={saving === "priority"}
+                            onValueChange={(v) => saveField("priority", v, "Couldn't change the priority")}
+                            options={priorityOptions}
+                        />
                     ) : (
-                        <PriorityBadge priority={task.priority} className="min-h-8 rounded-lg px-2.5 text-xs" />
+                        <span className={chip}><PriorityIcon priority={task.priority} /> <span className="font-medium text-gray-900">{task.priority}</span></span>
                     )}
 
                     {canEdit ? (
-                        <label className={cn(chip, overdue && "border-red-200 bg-red-50 text-red-800")}>
+                        <label className={cn(chip, "transition-colors hover:border-gray-300", overdue && "border-red-200 bg-red-50 text-red-800")}>
                             {saving === "dueDate" ? <Loader2 size={14} className="animate-spin text-gray-500" aria-hidden="true" /> : <Calendar size={14} aria-hidden="true" className={overdue ? "text-red-700" : "text-gray-500"} />}
                             <span>{overdue ? "Overdue" : "Due"}</span>
                             <input
@@ -145,34 +165,20 @@ export const TaskHeader = ({ task, project, canAssignMembers, canMoveTasks, canD
                         </span>
                     )}
 
-                    <span className={chip}>
-                        {saving === "assignee" ? <Loader2 size={14} className="animate-spin text-gray-500" aria-hidden="true" /> : <User size={14} className="text-gray-500" aria-hidden="true" />}
-                        {canAssignMembers ? (
-                            <label>
-                                <span className="sr-only">Assignee</span>
-                                <select
-                                    className={chipSelect}
-                                    disabled={saving === "assignee"}
-                                    value={task.assignee?._id || task.assignee || ""}
-                                    onChange={(e) => handleAssigneeChange(e.target.value)}
-                                >
-                                    <option value="">Unassigned</option>
-                                    {members.map((member) => (
-                                        <option key={member._id || member} value={member._id || member}>
-                                            {member.fullName || member.emailAddress || "Team member"}
-                                        </option>
-                                    ))}
-                                    {pm && (
-                                        <option value={pm._id || pm}>
-                                            {pm.fullName ? `${pm.fullName} (Manager)` : "Project manager"}
-                                        </option>
-                                    )}
-                                </select>
-                            </label>
-                        ) : (
-                            <span className="font-medium text-gray-900">{task.assignee?.fullName || "Unassigned"}</span>
-                        )}
-                    </span>
+                    {canAssignMembers ? (
+                        <ChipSelect
+                            label="Assignee"
+                            value={idOf(task.assignee) || UNASSIGNED}
+                            busy={saving === "assignee"}
+                            onValueChange={(v) => saveField("assignee", v === UNASSIGNED ? null : v, "Couldn't change the assignee")}
+                            options={assigneeOptions}
+                        />
+                    ) : (
+                        <span className={chip}>
+                            {assignee ? <Avatar name={assignee.fullName} src={assignee.profilePicture} size="xs" /> : <UserRound size={14} className="text-gray-400" aria-hidden="true" />}
+                            <span className="font-medium text-gray-900">{assignee?.fullName || "Unassigned"}</span>
+                        </span>
+                    )}
 
                     {canDelete && (
                         confirmDelete ? (

@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import Project from '../models/project.model.js';
+import Activity from '../models/activity.model.js';
 import User from '../models/user.model.js';
 import logger from '../utils/logger.js';
 import Task from '../models/task.model.js';
@@ -15,6 +17,17 @@ const PROJECT_FIELDS = [
     'projectName', 'projectDescription', 'budget', 'clientName', 'startDate', 'endDate',
     'priority', 'projectStatus', 'projectType', 'assignedTeamMembers',
 ];
+
+// Task-key prefix from the project name: initials for several words ("Mobile app 3.0" -> MA3),
+// the first letters for one word ("Website" -> WEB), made unique within the workspace.
+const projectKeyFor = async (name, workspace) => {
+    const words = name.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+    const base = (words.length > 1 ? words.slice(0, 3).map((w) => w[0]).join('') : (words[0] || 'PRJ').slice(0, 3)) || 'PRJ';
+    const taken = new Set((await Project.find({ workspace }).select('key').lean()).map((p) => p.key));
+    if (!taken.has(base)) return base;
+    for (let n = 2; n < 100; n++) if (!taken.has(`${base}${n}`)) return `${base}${n}`;
+    return `${base}${Date.now() % 1000}`;
+};
 
 export const createProject = async (req, res) => {
     try {
@@ -52,6 +65,7 @@ export const createProject = async (req, res) => {
         }
 
         const newProject = new Project({
+            key: await projectKeyFor(projectName, req.dbUser.workspace?._id || req.dbUser.workspace),
             projectName,
             projectDescription,
             budget,
@@ -293,5 +307,56 @@ export const getProjectById = async (req, res) => {
     } catch (error) {
         logger.error(`Error fetching project (ID: ${req.params.id}): ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: "Internal server error while fetching project." });
+    }
+};
+
+// Projects the caller can see: every project for Admins, otherwise the ones they manage or belong to.
+export const accessibleProjectFilter = (user) => {
+    const workspace = new mongoose.Types.ObjectId(String(user.workspace?._id || user.workspace));
+    return user.role?.roleName === 'Admin'
+        ? { workspace }
+        : { workspace, $or: [{ projectManager: user._id }, { assignedTeamMembers: user._id }] };
+};
+
+const PULSE_DAYS = 14;
+const dayKey = (date) => date.toISOString().slice(0, 10);
+
+// GET /api/projects/pulse: audit-log events per project per day over the last 14 days (UTC days),
+// the "pulse" shown next to each project.
+export const getProjectPulse = async (req, res) => {
+    try {
+        const filter = accessibleProjectFilter(req.dbUser);
+        const projectIds = (await Project.find(filter).select('_id').lean()).map((p) => p._id.toString());
+        const today = new Date();
+        const since = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - (PULSE_DAYS - 1)));
+        const days = Array.from({ length: PULSE_DAYS }, (_, i) => dayKey(new Date(since.getTime() + i * 86400000)));
+
+        const rows = await Activity.aggregate([
+            { $match: { workspace: filter.workspace, createdAt: { $gte: since } } },
+            {
+                $project: {
+                    day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+                    projectId: {
+                        $toString: {
+                            $ifNull: ['$metadata.projectId', { $ifNull: ['$metadata.project', {
+                                $cond: [{ $eq: ['$entityType', 'Project'] }, '$entityId', null],
+                            }] }],
+                        },
+                    },
+                },
+            },
+            { $match: { projectId: { $in: projectIds } } },
+            { $group: { _id: { project: '$projectId', day: '$day' }, count: { $sum: 1 } } },
+        ]);
+
+        const pulse = Object.fromEntries(projectIds.map((id) => [id, days.map(() => 0)]));
+        for (const { _id, count } of rows) {
+            const index = days.indexOf(_id.day);
+            if (index >= 0) pulse[_id.project][index] = count;
+        }
+        res.status(200).json({ days, pulse });
+    } catch (error) {
+        logger.error(`Error building project pulse: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ message: "Internal server error while loading activity." });
     }
 };
