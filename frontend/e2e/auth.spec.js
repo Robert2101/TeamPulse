@@ -24,11 +24,13 @@ test("signing out ends the session", async ({ page }) => {
     await expect(page).toHaveURL(/\/login/);
 });
 
-test("leaving the demo ends the sandbox session", async ({ page }) => {
-    await openDemoAs(page, "Lucas Moreau", "Team Member");
-    await page.getByRole("button", { name: "Log out" }).click();
-    await expect(page.getByRole("dialog")).toContainText("Leave the demo?");
-    await page.getByRole("dialog").getByRole("button", { name: "Leave demo" }).click();
+test("the demo buttons sign in for real, and the top bar switches account", async ({ page }) => {
+    await openDemoAs(page, "Maya Chen", "Admin");
+    await page.getByRole("button", { name: /Signed in as Maya Chen/ }).click();
+    await page.getByRole("menuitem", { name: /Grace Liu/ }).click();
+    await expect(page.getByRole("button", { name: /Signed in as Grace Liu, Stakeholder/ })).toBeVisible();
+
+    await signOut(page);
     await page.goto("/projects");
     await expect(page).toHaveURL(/\/login/);
 });

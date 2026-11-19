@@ -13,16 +13,16 @@ export const signIn = async (page, key) => {
     await expect(page).toHaveURL(/\/dashboard/);
 };
 
-/** Opens a private demo sandbox as one of the four personas. Each call gets a fresh copy of Fernway. */
+/** Signs in with one of the one-click demo buttons on the sign-in page (a real login with that account). */
 export const openDemoAs = async (page, name, role) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: `Open the demo as ${name}, ${role}` }).click();
+    await page.getByRole("button", { name: `Sign in as ${name}, ${role}` }).click();
     await expect(page).toHaveURL(/\/dashboard/);
 };
 
 export const signOut = async (page) => {
     await page.getByRole("button", { name: "Log out" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /^(Log out|Leave demo)$/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Log out" }).click();
     await expect(page).not.toHaveURL(/\/dashboard/);
 };
 
